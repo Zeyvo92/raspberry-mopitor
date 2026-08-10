@@ -1,8 +1,15 @@
-import { useEffect, useRef, useState } from "react";
-import type { MetricsSnapshot, ServerMessage, StaticInfo } from "../types";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type {
+  ClientMessage,
+  ConfigInfo,
+  MetricsSnapshot,
+  ServerMessage,
+  StaticInfo,
+} from "../types";
 
 interface MetricsState {
   staticInfo: StaticInfo | null;
+  config: ConfigInfo | null;
   metrics: MetricsSnapshot | null;
   connected: boolean;
 }
@@ -10,22 +17,26 @@ interface MetricsState {
 const MAX_BACKOFF_MS = 5000;
 
 /** Single WebSocket connection to the server, with automatic reconnection. */
-export function useMetrics(): MetricsState {
+export function useMetrics(): MetricsState & {
+  setRefreshInterval: (intervalMs: number) => void;
+} {
   const [state, setState] = useState<MetricsState>({
     staticInfo: null,
+    config: null,
     metrics: null,
     connected: false,
   });
   const backoff = useRef(500);
+  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    let ws: WebSocket | null = null;
     let reconnectTimer: number | undefined;
     let disposed = false;
 
     const connect = () => {
       const proto = location.protocol === "https:" ? "wss" : "ws";
-      ws = new WebSocket(`${proto}://${location.host}/ws`);
+      const ws = new WebSocket(`${proto}://${location.host}/ws`);
+      wsRef.current = ws;
 
       ws.onopen = () => {
         backoff.current = 500;
@@ -34,10 +45,16 @@ export function useMetrics(): MetricsState {
 
       ws.onmessage = (event) => {
         const message = JSON.parse(event.data as string) as ServerMessage;
-        if (message.type === "static") {
-          setState((s) => ({ ...s, staticInfo: message.data }));
-        } else {
-          setState((s) => ({ ...s, metrics: message.data }));
+        switch (message.type) {
+          case "static":
+            setState((s) => ({ ...s, staticInfo: message.data }));
+            break;
+          case "config":
+            setState((s) => ({ ...s, config: message.data }));
+            break;
+          case "metrics":
+            setState((s) => ({ ...s, metrics: message.data }));
+            break;
         }
       };
 
@@ -54,9 +71,19 @@ export function useMetrics(): MetricsState {
     return () => {
       disposed = true;
       window.clearTimeout(reconnectTimer);
-      ws?.close();
+      wsRef.current?.close();
     };
   }, []);
 
-  return state;
+  const setRefreshInterval = useCallback((intervalMs: number) => {
+    const ws = wsRef.current;
+    if (ws?.readyState === WebSocket.OPEN) {
+      const message: ClientMessage = { type: "setInterval", intervalMs };
+      ws.send(JSON.stringify(message));
+      // no optimistic update: the server echoes the effective (clamped)
+      // value as a config message, which is the single source of truth
+    }
+  }, []);
+
+  return { ...state, setRefreshInterval };
 }

@@ -51,6 +51,15 @@ export interface MetricsSnapshot {
   network: NetworkMetrics;
 }
 
+export interface ConfigInfo {
+  refreshIntervalMs: number;
+  minIntervalMs: number;
+  maxIntervalMs: number;
+}
+
 export type ServerMessage =
   | { type: "static"; data: StaticInfo }
+  | { type: "config"; data: ConfigInfo }
   | { type: "metrics"; data: MetricsSnapshot };
+
+export type ClientMessage = { type: "setInterval"; intervalMs: number };

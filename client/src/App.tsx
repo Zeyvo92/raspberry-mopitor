@@ -7,14 +7,17 @@ import { TemperatureCard } from "./components/TemperatureCard";
 import { useMetrics } from "./hooks/useMetrics";
 
 export default function App() {
-  const { staticInfo, metrics, connected } = useMetrics();
+  const { staticInfo, config, metrics, connected, setRefreshInterval } =
+    useMetrics();
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
       <SystemHeader
         info={staticInfo}
+        config={config}
         uptime={metrics?.uptime ?? null}
         connected={connected}
+        onChangeInterval={setRefreshInterval}
       />
 
       {metrics ? (
