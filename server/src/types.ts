@@ -1,6 +1,16 @@
 // Wire protocol types. Mirrored in client/src/types.ts — keep both in sync.
 
+export interface AppVersionInfo {
+  /** running version, "dev" when unknown */
+  version: string;
+  /** newest published release, null while unknown (offline, no release yet) */
+  latestVersion: string | null;
+  updateAvailable: boolean;
+  releaseUrl: string | null;
+}
+
 export interface StaticInfo {
+  app: AppVersionInfo;
   hostname: string;
   /** e.g. "Raspberry Pi 4 Model B Rev 1.4", or the machine model on non-Pi hosts */
   model: string;

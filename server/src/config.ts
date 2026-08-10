@@ -26,4 +26,10 @@ export const config = {
   diskPath: process.env.DISK_PATH ?? "/",
   /** where the built SPA lives */
   staticDir: process.env.STATIC_DIR ?? path.resolve(here, "../../client/dist"),
+  /** set UPDATE_CHECK=false to disable the GitHub release check entirely */
+  updateCheck: (process.env.UPDATE_CHECK ?? "true").toLowerCase() !== "false",
+  /** repo whose releases define "latest" — override in forks */
+  updateCheckRepo: process.env.UPDATE_CHECK_REPO ?? "Zeyvo92/raspberry-mopitor",
+  /** GitHub API base; overridable for tests and GitHub Enterprise */
+  updateCheckApiBase: process.env.UPDATE_CHECK_API ?? "https://api.github.com",
 };

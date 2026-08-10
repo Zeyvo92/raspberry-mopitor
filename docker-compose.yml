@@ -1,6 +1,10 @@
+# Default deployment: prebuilt multi-arch image from GHCR.
+#   start:  docker compose up -d
+#   update: docker compose pull && docker compose up -d
+# To build from source instead, use docker-compose.build.yml.
 services:
   raspberry-mopitor:
-    build: .
+    image: ghcr.io/zeyvo92/raspberry-mopitor:latest
     container_name: raspberry-mopitor
     restart: unless-stopped
     # host network + pid: metrics reflect the real Pi, not the container,

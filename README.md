@@ -9,10 +9,12 @@ React + Vite + Tailwind. Full design notes in [docs/SPECS.md](docs/SPECS.md) (Fr
 
 ## Run with Docker (recommended)
 
+Prebuilt multi-arch images (arm64, armv7, amd64) are published to GHCR on every
+release — nothing is compiled on the Pi. You only need the compose file:
+
 ```bash
-git clone https://github.com/zeyvo92/raspberry-mopitor.git
-cd raspberry-mopitor
-docker compose up -d --build
+curl -fsSLO https://raw.githubusercontent.com/Zeyvo92/raspberry-mopitor/main/docker-compose.yml
+docker compose up -d
 ```
 
 Open `http://<pi-address>:8585`.
@@ -20,6 +22,29 @@ Open `http://<pi-address>:8585`.
 The compose file uses `network_mode: host`, `pid: host` and a read-only mount of
 `/` so the metrics reflect the **host Pi**, not the container. No `--privileged`
 needed.
+
+## Updating
+
+The server checks GitHub for the latest release at startup (then twice a day)
+and the dashboard header shows a **"vX.Y.Z available"** badge when you're
+behind. To update:
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+For fully automatic updates, run [Watchtower](https://containrrr.dev/watchtower/)
+on your Pi — it redeploys the container whenever a new image is published.
+The check is anonymous (one HTTPS request to api.github.com) and can be
+disabled with `UPDATE_CHECK=false`; an offline Pi simply skips it.
+
+## Build from source
+
+```bash
+git clone https://github.com/Zeyvo92/raspberry-mopitor.git
+cd raspberry-mopitor
+docker compose -f docker-compose.build.yml up -d --build
+```
 
 ## Run for development
 
@@ -39,11 +64,20 @@ cd client && npm install && npm run dev
 | `REFRESH_INTERVAL_MS` | `1000` | initial sampling interval, clamped to [`100`, `60000`] |
 | `DISK_PATH` | `/` | mount point to report (`/host` in Docker) |
 | `STATIC_DIR` | `../client/dist` | built SPA location |
+| `UPDATE_CHECK` | `true` | set `false` to disable the release check |
+| `UPDATE_CHECK_REPO` | `Zeyvo92/raspberry-mopitor` | repo whose releases define "latest" (for forks) |
 
 The refresh rate is shown in the dashboard header and can be changed live
 (100ms → 10s presets); the value is shared by all connected viewers.
 Metrics are only sampled while at least one browser is connected — an idle
 monitor costs the Pi nothing.
+
+## Releasing (maintainers)
+
+1. Bump `version` in `server/package.json` and `client/package.json`
+2. Commit (`chore(release): vX.Y.Z`), tag `vX.Y.Z`, push the tag
+3. CI builds the multi-arch image, pushes it to GHCR and creates the GitHub
+   Release — which is what running instances compare themselves against
 
 ## Roadmap
 

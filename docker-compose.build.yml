@@ -1,0 +1,15 @@
+# Build from source (contributors, or before the first GHCR release):
+#   docker compose -f docker-compose.build.yml up -d --build
+services:
+  raspberry-mopitor:
+    build: .
+    container_name: raspberry-mopitor
+    restart: unless-stopped
+    network_mode: host
+    pid: host
+    environment:
+      PORT: "8585"
+      REFRESH_INTERVAL_MS: "1000"
+      DISK_PATH: /host
+    volumes:
+      - /:/host:ro

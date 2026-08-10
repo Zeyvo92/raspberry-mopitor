@@ -3,6 +3,7 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 import { WebSocketServer } from "ws";
 import { config } from "./config.js";
+import { startUpdateChecker } from "./version.js";
 import { Hub } from "./ws/hub.js";
 
 const MIME_TYPES: Record<string, string> = {
@@ -52,6 +53,8 @@ const server = http.createServer((req, res) => void serveStatic(req, res));
 const wss = new WebSocketServer({ server, path: "/ws" });
 const hub = new Hub();
 wss.on("connection", (ws) => void hub.add(ws));
+
+startUpdateChecker();
 
 server.listen(config.port, () => {
   console.log(`raspberry-mopitor listening on http://localhost:${config.port}`);
