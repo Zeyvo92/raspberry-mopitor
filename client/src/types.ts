@@ -1,6 +1,14 @@
 // Wire protocol types. Mirrored from server/src/types.ts — keep both in sync.
 
+export interface AppVersionInfo {
+  version: string;
+  latestVersion: string | null;
+  updateAvailable: boolean;
+  releaseUrl: string | null;
+}
+
 export interface StaticInfo {
+  app: AppVersionInfo;
   hostname: string;
   model: string;
   os: string;

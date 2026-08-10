@@ -26,10 +26,22 @@ export function SystemHeader({
             }`}
             title={connected ? "connected" : "disconnected"}
           />
+          {info?.app.updateAvailable && (
+            <a
+              href={info.app.releaseUrl ?? "#"}
+              target="_blank"
+              rel="noreferrer"
+              className="ml-3 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 align-middle text-xs font-medium text-amber-400 hover:bg-amber-500/20"
+              title={`You are running v${info.app.version} — v${info.app.latestVersion} is available`}
+            >
+              v{info.app.latestVersion} available ↗
+            </a>
+          )}
         </h1>
         {info && (
           <p className="mt-1 text-xs text-zinc-500">
-            {info.model} · {info.os} · {info.kernel} ({info.arch})
+            v{info.app.version} · {info.model} · {info.os} · {info.kernel} (
+            {info.arch})
           </p>
         )}
       </div>

@@ -1,8 +1,9 @@
 import os from "node:os";
 import si from "systeminformation";
+import { getAppInfo } from "../version.js";
 import type { StaticInfo } from "../types.js";
 
-/** Info that never changes while the server runs — collected once, sent on connect. */
+/** Sent on connect: hardware/OS info plus the current version-check state. */
 export async function collectStaticInfo(): Promise<StaticInfo> {
   const [system, osInfo, cpu] = await Promise.all([
     si.system(),
@@ -16,6 +17,7 @@ export async function collectStaticInfo(): Promise<StaticInfo> {
     "Unknown";
 
   return {
+    app: getAppInfo(),
     hostname: os.hostname(),
     model,
     os: `${osInfo.distro} ${osInfo.release}`.trim(),

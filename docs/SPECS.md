@@ -66,7 +66,10 @@ Endpoint : `GET /ws` (upgrade). Deux types de messages, du serveur vers le clien
 
 ```jsonc
 // à la connexion — infos qui ne changent pas
-{ "type": "static", "data": { "hostname": "...", "model": "Raspberry Pi 4 Model B",
+{ "type": "static", "data": {
+  "app": { "version": "0.1.0", "latestVersion": "0.2.0",
+           "updateAvailable": true, "releaseUrl": "https://github.com/..." },
+  "hostname": "...", "model": "Raspberry Pi 4 Model B",
   "os": "...", "kernel": "...", "arch": "...", "cpuModel": "...", "cores": 4 } }
 
 // à la connexion et à chaque changement — config partagée par tous les clients
@@ -105,6 +108,9 @@ La reconnexion est automatique côté front (backoff exponentiel).
 | `REFRESH_INTERVAL_MS` | `1000` | intervalle d'échantillonnage **initial** (borné à [`100`, `60000`]) — modifiable ensuite depuis l'UI |
 | `DISK_PATH` | `/` | point de montage surveillé (`/host` en Docker) |
 | `STATIC_DIR` | `../client/dist` | fichiers statiques de la SPA |
+| `UPDATE_CHECK` | `true` | `false` pour désactiver le check de version |
+| `UPDATE_CHECK_REPO` | `Zeyvo92/raspberry-mopitor` | repo dont les releases font référence (forks) |
+| `APP_VERSION` | *(auto)* | version affichée — injectée dans l'image Docker depuis le tag git, sinon lue dans `package.json` |
 
 ## Déploiement Docker
 
@@ -121,6 +127,22 @@ Pour que les métriques reflètent **le Pi hôte** et pas le conteneur :
 
 Lecture seule partout — pas de `--privileged`. `/proc` (CPU, RAM) et `/sys`
 (température) sont déjà globaux vus depuis le conteneur.
+
+## Distribution & mises à jour
+
+- **Releases** : un tag `vX.Y.Z` poussé déclenche la GitHub Action `release.yml` :
+  build multi-arch (arm64, armv7, amd64) → push sur GHCR
+  (`ghcr.io/zeyvo92/raspberry-mopitor`, tags `X.Y.Z`, `X.Y`, `latest`)
+  → création de la GitHub Release. Rien n'est compilé sur le Pi.
+- **Check de version** : au démarrage puis toutes les 6 h, le serveur interroge
+  `GET /repos/<repo>/releases/latest` (API GitHub, anonyme, timeout 8 s).
+  Le résultat est intégré au message `static` (`app.updateAvailable`) et l'UI
+  affiche un badge « vX.Y.Z available » cliquable vers la release. Tout échec
+  (Pi hors-ligne, rate-limit, aucune release) est silencieux : le monitoring
+  ne dépend jamais du check. Désactivable via `UPDATE_CHECK=false`.
+- **Mise à jour utilisateur** : `docker compose pull && docker compose up -d`.
+  Auto-update possible en ajoutant Watchtower côté utilisateur (son choix).
+- **CI** : `ci.yml` build server + client sur chaque PR et push sur `main`.
 
 ## Structure du repo
 
@@ -152,5 +174,6 @@ docs/SPECS.md            # ce document
 ## Roadmap
 
 1. **v1** — dashboard live complet ✅
-2. **v1.x** — réglage de l'intervalle depuis l'UI ✅ · polish UI, i18n éventuelle
+2. **v1.x** — réglage de l'intervalle depuis l'UI ✅ · images GHCR + check de
+   version ✅ · polish UI, i18n éventuelle
 3. **v2** — historique/graphes, processus, conteneurs Docker, alertes
