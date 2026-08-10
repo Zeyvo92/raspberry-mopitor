@@ -69,6 +69,10 @@ Endpoint : `GET /ws` (upgrade). Deux types de messages, du serveur vers le clien
 { "type": "static", "data": { "hostname": "...", "model": "Raspberry Pi 4 Model B",
   "os": "...", "kernel": "...", "arch": "...", "cpuModel": "...", "cores": 4 } }
 
+// à la connexion et à chaque changement — config partagée par tous les clients
+{ "type": "config", "data": { "refreshIntervalMs": 1000,
+  "minIntervalMs": 100, "maxIntervalMs": 60000 } }
+
 // à chaque tick — métriques live
 { "type": "metrics", "data": {
   "ts": 1723300000000,
@@ -83,14 +87,22 @@ Endpoint : `GET /ws` (upgrade). Deux types de messages, du serveur vers le clien
 } }
 ```
 
-Le client ne envoie rien (v1) ; la reconnexion est automatique côté front.
+Du client vers le serveur, un seul message :
+
+```jsonc
+// change l'intervalle d'échantillonnage — serveur borne à [100, 60000] ms
+// puis rediffuse un message "config" à TOUS les clients (valeur partagée)
+{ "type": "setInterval", "intervalMs": 500 }
+```
+
+La reconnexion est automatique côté front (backoff exponentiel).
 
 ## Configuration (variables d'environnement)
 
 | Variable | Défaut | Rôle |
 |---|---|---|
 | `PORT` | `8585` | port HTTP/WS |
-| `REFRESH_INTERVAL_MS` | `1000` | intervalle d'échantillonnage (min. `100`) |
+| `REFRESH_INTERVAL_MS` | `1000` | intervalle d'échantillonnage **initial** (borné à [`100`, `60000`]) — modifiable ensuite depuis l'UI |
 | `DISK_PATH` | `/` | point de montage surveillé (`/host` en Docker) |
 | `STATIC_DIR` | `../client/dist` | fichiers statiques de la SPA |
 
@@ -139,6 +151,6 @@ docs/SPECS.md            # ce document
 
 ## Roadmap
 
-1. **v1** — dashboard live complet (ce scaffold)
-2. **v1.x** — polish UI, réglage de l'intervalle depuis l'UI, i18n éventuelle
+1. **v1** — dashboard live complet ✅
+2. **v1.x** — réglage de l'intervalle depuis l'UI ✅ · polish UI, i18n éventuelle
 3. **v2** — historique/graphes, processus, conteneurs Docker, alertes

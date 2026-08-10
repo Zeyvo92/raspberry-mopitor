@@ -36,10 +36,12 @@ cd client && npm install && npm run dev
 | Env var | Default | Description |
 |---|---|---|
 | `PORT` | `8585` | HTTP/WebSocket port |
-| `REFRESH_INTERVAL_MS` | `1000` | sampling interval, minimum `100` |
+| `REFRESH_INTERVAL_MS` | `1000` | initial sampling interval, clamped to [`100`, `60000`] |
 | `DISK_PATH` | `/` | mount point to report (`/host` in Docker) |
 | `STATIC_DIR` | `../client/dist` | built SPA location |
 
+The refresh rate is shown in the dashboard header and can be changed live
+(100ms → 10s presets); the value is shared by all connected viewers.
 Metrics are only sampled while at least one browser is connected — an idle
 monitor costs the Pi nothing.
 
