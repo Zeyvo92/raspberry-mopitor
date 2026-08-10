@@ -1,0 +1,35 @@
+import { CpuCard } from "./components/CpuCard";
+import { DiskCard } from "./components/DiskCard";
+import { MemoryCard } from "./components/MemoryCard";
+import { NetworkCard } from "./components/NetworkCard";
+import { SystemHeader } from "./components/SystemHeader";
+import { TemperatureCard } from "./components/TemperatureCard";
+import { useMetrics } from "./hooks/useMetrics";
+
+export default function App() {
+  const { staticInfo, metrics, connected } = useMetrics();
+
+  return (
+    <div className="mx-auto max-w-5xl px-4 py-6">
+      <SystemHeader
+        info={staticInfo}
+        uptime={metrics?.uptime ?? null}
+        connected={connected}
+      />
+
+      {metrics ? (
+        <main className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <CpuCard cpu={metrics.cpu} />
+          <MemoryCard memory={metrics.memory} />
+          <TemperatureCard temperature={metrics.temperature} />
+          <DiskCard disk={metrics.disk} />
+          <NetworkCard network={metrics.network} />
+        </main>
+      ) : (
+        <p className="text-sm text-zinc-500">
+          {connected ? "Waiting for metrics…" : "Connecting…"}
+        </p>
+      )}
+    </div>
+  );
+}
