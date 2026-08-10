@@ -1,5 +1,8 @@
 # ---- build the React SPA ----
-FROM node:22-alpine AS client-build
+# The SPA output is plain static files, identical for every target arch:
+# build it once on the build host (natively, no QEMU). This also avoids
+# lightningcss (Tailwind v4) lacking a prebuilt binary on 32-bit ARM musl.
+FROM --platform=$BUILDPLATFORM node:22-alpine AS client-build
 WORKDIR /build
 COPY client/package*.json ./
 RUN npm ci
