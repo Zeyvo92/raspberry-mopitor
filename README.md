@@ -74,8 +74,10 @@ monitor costs the Pi nothing.
 
 ## Releasing (maintainers)
 
-1. Bump `version` in `server/package.json` and `client/package.json`
-2. Commit (`chore(release): vX.Y.Z`), tag `vX.Y.Z`, push the tag
+1. Bump `version` in `server/package.json` and `client/package.json`,
+   commit (`chore(release): vX.Y.Z`)
+2. Either push a tag `vX.Y.Z`, or use **Actions → Release → Run workflow**
+   and type the version (the tag is created for you — works from the web UI)
 3. CI builds the multi-arch image, pushes it to GHCR and creates the GitHub
    Release — which is what running instances compare themselves against
 
