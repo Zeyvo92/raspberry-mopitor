@@ -1,11 +1,18 @@
-# Pushing a tag like v1.2.3 builds the multi-arch Docker image, publishes it
-# to GHCR (:1.2.3, :1.2, :latest) and creates the GitHub Release whose tag
-# the app's update checker compares against.
+# Two ways to cut a release, both build the multi-arch Docker image, publish
+# it to GHCR (:1.2.3, :1.2, :latest) and create the GitHub Release whose tag
+# the app's update checker compares against:
+#   - push a tag like v1.2.3
+#   - Actions -> Release -> "Run workflow" with the version (creates the tag)
 name: Release
 
 on:
   push:
     tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. v0.1.1 (tag is created on the chosen branch)"
+        required: true
 
 permissions:
   contents: write
@@ -14,6 +21,9 @@ permissions:
 jobs:
   docker:
     runs-on: ubuntu-latest
+    env:
+      # tag push -> the tag name; manual dispatch -> the typed version
+      VERSION: ${{ inputs.version || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
@@ -28,8 +38,8 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{version}},value=${{ env.VERSION }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ env.VERSION }}
             type=raw,value=latest
       - uses: docker/build-push-action@v6
         with:
@@ -38,7 +48,7 @@ jobs:
           platforms: linux/amd64,linux/arm64,linux/arm/v7
           push: true
           build-args: |
-            VERSION=${{ github.ref_name }}
+            VERSION=${{ env.VERSION }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -49,6 +59,9 @@ jobs:
     needs: docker
     steps:
       - uses: actions/checkout@v4
+      # on manual dispatch the tag doesn't exist yet: it is created here,
+      # on the commit the workflow ran against
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.version || github.ref_name }}
           generate_release_notes: true
