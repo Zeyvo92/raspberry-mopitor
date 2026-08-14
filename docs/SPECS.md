@@ -19,6 +19,7 @@ en temps réel l'état de la machine (CPU, RAM, température, disque, réseau).
 | CPU | usage global + par cœur, fréquence, load average (1/5/15 min) |
 | Mémoire | RAM utilisée/disponible/totale, swap |
 | Température | température CPU, seuils visuels (vert/jaune/rouge) |
+| Ventilateur | vitesse en RPM via hwmon (Pi 5 Active Cooler…) — absent si le ventilateur n'a pas de tachymètre (fans GPIO 2 fils) |
 | Disque | espace utilisé/total sur `/` |
 | Réseau | débit rx/tx par seconde (interface principale) |
 | Système | hostname, modèle de Pi, OS/kernel, uptime |
@@ -85,6 +86,7 @@ Endpoint : `GET /ws` (upgrade). Deux types de messages, du serveur vers le clien
   "memory": { "total": 0, "used": 0, "available": 0,
               "swapTotal": 0, "swapUsed": 0 },
   "temperature": { "cpu": 52.1 },          // null si sonde indisponible
+  "fan": { "rpm": 3241 },                  // null sans tachymètre (hwmon)
   "disk": { "mount": "/", "total": 0, "used": 0 },
   "network": { "iface": "eth0", "rxSec": 0, "txSec": 0 }
 } }
@@ -108,6 +110,7 @@ La reconnexion est automatique côté front (backoff exponentiel).
 | `REFRESH_INTERVAL_MS` | `1000` | intervalle d'échantillonnage **initial** (borné à [`100`, `60000`]) — modifiable ensuite depuis l'UI |
 | `DISK_PATH` | `/` | point de montage surveillé (`/host` en Docker) |
 | `HOST_ROOT` | `/host` | racine de l'hôte montée en lecture seule — sert à lire le `/etc/os-release` de l'hôte (fallback : celui du conteneur). Le modèle de Pi, lui, vient du device tree (`/sys/firmware/devicetree/base/model`), non namespacé |
+| `HWMON_ROOT` | `/sys/class/hwmon` | racine hwmon du kernel (tachymètre ventilateur) — surchargée uniquement pour les tests |
 | `STATIC_DIR` | `../client/dist` | fichiers statiques de la SPA |
 | `UPDATE_CHECK` | `true` | `false` pour désactiver le check de version |
 | `UPDATE_CHECK_REPO` | `Zeyvo92/raspberry-mopitor` | repo dont les releases font référence (forks) |

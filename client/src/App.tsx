@@ -24,7 +24,7 @@ export default function App() {
         <main className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <CpuCard cpu={metrics.cpu} />
           <MemoryCard memory={metrics.memory} />
-          <TemperatureCard temperature={metrics.temperature} />
+          <TemperatureCard temperature={metrics.temperature} fan={metrics.fan} />
           <DiskCard disk={metrics.disk} />
           <NetworkCard network={metrics.network} />
         </main>
