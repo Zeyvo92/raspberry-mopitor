@@ -11,5 +11,6 @@ services:
       PORT: "8585"
       REFRESH_INTERVAL_MS: "1000"
       DISK_PATH: /host
+      HOST_ROOT: /host
     volumes:
       - /:/host:ro
