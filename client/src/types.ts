@@ -37,6 +37,10 @@ export interface TemperatureMetrics {
   cpu: number | null;
 }
 
+export interface FanMetrics {
+  rpm: number | null;
+}
+
 export interface DiskMetrics {
   mount: string;
   total: number;
@@ -55,6 +59,7 @@ export interface MetricsSnapshot {
   cpu: CpuMetrics;
   memory: MemoryMetrics;
   temperature: TemperatureMetrics;
+  fan: FanMetrics;
   disk: DiskMetrics;
   network: NetworkMetrics;
 }

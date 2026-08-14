@@ -28,6 +28,8 @@ export const config = {
    * used to read the host's /etc/os-release. Missing path = fall back to
    * the local one (bare-metal installs). */
   hostRoot: process.env.HOST_ROOT ?? "/host",
+  /** kernel hwmon root, where fan tachometers live; overridable for tests */
+  hwmonRoot: process.env.HWMON_ROOT ?? "/sys/class/hwmon",
   /** where the built SPA lives */
   staticDir: process.env.STATIC_DIR ?? path.resolve(here, "../../client/dist"),
   /** set UPDATE_CHECK=false to disable the GitHub release check entirely */

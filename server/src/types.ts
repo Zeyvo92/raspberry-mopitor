@@ -46,6 +46,12 @@ export interface TemperatureMetrics {
   cpu: number | null;
 }
 
+export interface FanMetrics {
+  /** RPM, null when the fan has no tachometer or there is no fan
+   * (Pi 5 Active Cooler reports it; GPIO 2-wire fans cannot) */
+  rpm: number | null;
+}
+
 export interface DiskMetrics {
   mount: string;
   /** bytes */
@@ -68,6 +74,7 @@ export interface MetricsSnapshot {
   cpu: CpuMetrics;
   memory: MemoryMetrics;
   temperature: TemperatureMetrics;
+  fan: FanMetrics;
   disk: DiskMetrics;
   network: NetworkMetrics;
 }
