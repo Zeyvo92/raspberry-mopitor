@@ -14,7 +14,9 @@ services:
     environment:
       PORT: "8585"
       REFRESH_INTERVAL_MS: "1000"
-      # host root is mounted read-only below; report its disk usage
+      # host root is mounted read-only below: disk usage and os-release
+      # are read from there so they reflect the Pi, not the container
       DISK_PATH: /host
+      HOST_ROOT: /host
     volumes:
       - /:/host:ro

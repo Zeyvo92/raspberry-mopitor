@@ -24,6 +24,10 @@ export const config = {
   refreshIntervalMs: clampInterval(intEnv("REFRESH_INTERVAL_MS", 1000, MIN_INTERVAL_MS)),
   /** mount point to report disk usage for ("/host" when running in Docker) */
   diskPath: process.env.DISK_PATH ?? "/",
+  /** where the host's root fs is mounted read-only inside the container;
+   * used to read the host's /etc/os-release. Missing path = fall back to
+   * the local one (bare-metal installs). */
+  hostRoot: process.env.HOST_ROOT ?? "/host",
   /** where the built SPA lives */
   staticDir: process.env.STATIC_DIR ?? path.resolve(here, "../../client/dist"),
   /** set UPDATE_CHECK=false to disable the GitHub release check entirely */

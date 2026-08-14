@@ -63,6 +63,7 @@ cd client && npm install && npm run dev
 | `PORT` | `8585` | HTTP/WebSocket port |
 | `REFRESH_INTERVAL_MS` | `1000` | initial sampling interval, clamped to [`100`, `60000`] |
 | `DISK_PATH` | `/` | mount point to report (`/host` in Docker) |
+| `HOST_ROOT` | `/host` | host root mount, used to read the host's `/etc/os-release` (falls back to the local one) |
 | `STATIC_DIR` | `../client/dist` | built SPA location |
 | `UPDATE_CHECK` | `true` | set `false` to disable the release check |
 | `UPDATE_CHECK_REPO` | `Zeyvo92/raspberry-mopitor` | repo whose releases define "latest" (for forks) |

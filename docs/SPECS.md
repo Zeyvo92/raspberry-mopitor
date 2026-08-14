@@ -107,6 +107,7 @@ La reconnexion est automatique côté front (backoff exponentiel).
 | `PORT` | `8585` | port HTTP/WS |
 | `REFRESH_INTERVAL_MS` | `1000` | intervalle d'échantillonnage **initial** (borné à [`100`, `60000`]) — modifiable ensuite depuis l'UI |
 | `DISK_PATH` | `/` | point de montage surveillé (`/host` en Docker) |
+| `HOST_ROOT` | `/host` | racine de l'hôte montée en lecture seule — sert à lire le `/etc/os-release` de l'hôte (fallback : celui du conteneur). Le modèle de Pi, lui, vient du device tree (`/sys/firmware/devicetree/base/model`), non namespacé |
 | `STATIC_DIR` | `../client/dist` | fichiers statiques de la SPA |
 | `UPDATE_CHECK` | `true` | `false` pour désactiver le check de version |
 | `UPDATE_CHECK_REPO` | `Zeyvo92/raspberry-mopitor` | repo dont les releases font référence (forks) |
