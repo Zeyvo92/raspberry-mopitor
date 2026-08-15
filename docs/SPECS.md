@@ -146,7 +146,28 @@ Lecture seule partout — pas de `--privileged`. `/proc` (CPU, RAM) et `/sys`
   ne dépend jamais du check. Désactivable via `UPDATE_CHECK=false`.
 - **Mise à jour utilisateur** : `docker compose pull && docker compose up -d`.
   Auto-update possible en ajoutant Watchtower côté utilisateur (son choix).
-- **CI** : `ci.yml` build server + client sur chaque PR et push sur `main`.
+- **CI** : `ci.yml` build + tests server et client sur chaque PR et push sur `main`.
+
+## Tests
+
+- **Outillage** : [Vitest](https://vitest.dev/) des deux côtés (+ Testing Library
+  et jsdom côté client), couverture v8 avec **seuils à 100 %** (statements,
+  branches, functions, lines) imposés en CI.
+- **Serveur** (`server/test/`) : unitaires sur la config, le semver/le checker de
+  version (API GitHub mockée en local), chaque collecteur (`systeminformation`
+  mocké) et les lecteurs Pi (device tree, os-release, hwmon — fixtures sur
+  disque) ; le hub WebSocket est testé avec des sockets simulées et des fake
+  timers (cadence, clamp, broadcast multi-clients, déconnexions pendant
+  l'échantillonnage) ; `app.ts` est testé en intégration réelle (HTTP + WS +
+  vrais collecteurs). Exclusions justifiées : `server.ts` (bootstrap du
+  process) et la garde anti-traversal (inatteignable, la normalisation WHATWG
+  des URL la précède).
+- **Client** (`*.test.ts[x]` à côté du code) : formatters, hook `useMetrics`
+  (WebSocket simulée : reconnexion/backoff, messages, envoi d'intervalle),
+  chaque composant (états vides, seuils de couleur, badge de mise à jour…).
+  Exclusion : `main.tsx` (bootstrap DOM).
+- **Commandes** : `npm test` ou `npm run test:coverage` dans `server/` et
+  `client/`.
 
 ## Structure du repo
 

@@ -40,7 +40,11 @@ export class Hub {
 
   private remove(ws: WebSocket): void {
     this.clients.delete(ws);
-    if (this.clients.size === 0 && this.timer) {
+    if (this.clients.size === 0) this.stopLoop();
+  }
+
+  private stopLoop(): void {
+    if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
     }
@@ -88,9 +92,15 @@ export class Hub {
   }
 
   private async tick(): Promise<void> {
+    // A client can disconnect while add() awaits the static info, leaving a
+    // loop that started for nobody — heal by stopping it here.
+    if (this.clients.size === 0) {
+      this.stopLoop();
+      return;
+    }
     // Skip a beat rather than pile up collections if sampling is slower
     // than the configured interval.
-    if (this.collecting || this.clients.size === 0) return;
+    if (this.collecting) return;
     this.collecting = true;
     try {
       this.broadcast({ type: "metrics", data: await collectSnapshot() });
