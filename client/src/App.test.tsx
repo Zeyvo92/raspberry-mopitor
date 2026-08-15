@@ -53,4 +53,20 @@ describe("App", () => {
       expect(screen.getByRole("heading", { name: title })).toBeInTheDocument();
     }
   });
+
+  it("hides the fan card on hardware without a tachometer", () => {
+    mockedUseMetrics.mockReturnValue({ ...baseState, connected: true, metrics });
+    render(<App />);
+    expect(screen.queryByRole("heading", { name: "Fan" })).toBeNull();
+  });
+
+  it("shows the fan card once a speed is reported", () => {
+    mockedUseMetrics.mockReturnValue({
+      ...baseState,
+      connected: true,
+      metrics: { ...metrics, fan: { rpm: 3200 } },
+    });
+    render(<App />);
+    expect(screen.getByRole("heading", { name: "Fan" })).toBeInTheDocument();
+  });
 });

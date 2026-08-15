@@ -19,7 +19,7 @@ en temps réel l'état de la machine (CPU, RAM, température, disque, réseau).
 | CPU | usage global + par cœur, fréquence, load average (1/5/15 min) |
 | Mémoire | RAM utilisée/disponible/totale, swap |
 | Température | température CPU, seuils visuels (vert/jaune/rouge) |
-| Ventilateur | vitesse en RPM via hwmon (Pi 5 Active Cooler…) — absent si le ventilateur n'a pas de tachymètre (fans GPIO 2 fils) |
+| Ventilateur | vitesse en RPM via hwmon (Pi 5 Active Cooler…), affichée en jauge circulaire avec hélice animée — card masquée si le ventilateur n'a pas de tachymètre (fans GPIO 2 fils) |
 | Disque | espace utilisé/total sur `/` |
 | Réseau | débit rx/tx par seconde (interface principale) |
 | Système | hostname, modèle de Pi, OS/kernel, uptime |
@@ -188,6 +188,17 @@ Dockerfile               # multi-stage
 docker-compose.yml
 docs/SPECS.md            # ce document
 ```
+
+## Affichage du ventilateur
+
+hwmon ne publie pas le régime nominal du ventilateur : une valeur brute en RPM
+ne dit rien sans échelle. La jauge est donc calée sur **8000 RPM** (vitesse max
+de l'Active Cooler du Pi 5) et s'étend automatiquement si un ventilateur tourne
+plus vite, de sorte que le remplissage signifie toujours « à quel point il
+pousse ». L'hélice tourne à une vitesse **indicative** : à plein régime un
+ventilateur fait ~130 tours/seconde, irreprésentable à l'écran, donc la plage
+est ramenée à 2,5 s → 0,12 s par tour. L'animation respecte
+`prefers-reduced-motion`.
 
 ## Conventions
 

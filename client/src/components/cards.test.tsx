@@ -80,33 +80,20 @@ describe("MemoryCard", () => {
 });
 
 describe("TemperatureCard", () => {
-  it("says so when no sensor exists at all", () => {
-    render(<TemperatureCard temperature={{ cpu: null }} fan={{ rpm: null }} />);
+  it("says so when no sensor exists", () => {
+    render(<TemperatureCard temperature={{ cpu: null }} />);
     expect(screen.getByText("No sensor available")).toBeInTheDocument();
   });
 
   it("shows the temperature with a normal subtitle", () => {
-    render(<TemperatureCard temperature={{ cpu: 52.1 }} fan={{ rpm: null }} />);
+    render(<TemperatureCard temperature={{ cpu: 52.1 }} />);
     expect(screen.getByText("52.1°C")).toBeInTheDocument();
     expect(screen.getByText("CPU")).toBeInTheDocument();
   });
 
   it("warns near the throttle limit", () => {
-    render(<TemperatureCard temperature={{ cpu: 80 }} fan={{ rpm: null }} />);
+    render(<TemperatureCard temperature={{ cpu: 80 }} />);
     expect(screen.getByText(/throttle limit/)).toBeInTheDocument();
-  });
-
-  it("shows the fan RPM alongside the temperature", () => {
-    render(<TemperatureCard temperature={{ cpu: 50 }} fan={{ rpm: 3241 }} />);
-    expect(screen.getByText("fan")).toBeInTheDocument();
-    expect(screen.getByText(/3[,  .]?241 RPM/)).toBeInTheDocument();
-  });
-
-  it("handles a fan without a temperature sensor, including stopped", () => {
-    render(<TemperatureCard temperature={{ cpu: null }} fan={{ rpm: 0 }} />);
-    expect(screen.queryByText("No sensor available")).toBeNull();
-    expect(screen.getByText("0 RPM")).toBeInTheDocument();
-    expect(screen.getByText("(stopped)")).toBeInTheDocument();
   });
 });
 
