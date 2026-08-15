@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -10,6 +11,23 @@ export default defineConfig({
       "/ws": {
         target: "ws://localhost:8585",
         ws: true,
+      },
+    },
+  },
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./src/test-setup.ts"],
+    css: false,
+    coverage: {
+      provider: "v8",
+      include: ["src/**"],
+      // main.tsx is the DOM bootstrap; types.ts has no runtime code
+      exclude: ["src/main.tsx", "src/types.ts", "src/test-setup.ts"],
+      thresholds: {
+        statements: 100,
+        branches: 100,
+        functions: 100,
+        lines: 100,
       },
     },
   },

@@ -41,13 +41,16 @@ export async function readHostOsRelease(
 }
 
 /** Sent on connect: hardware/OS info plus the current version-check state. */
-export async function collectStaticInfo(): Promise<StaticInfo> {
+export async function collectStaticInfo(paths?: {
+  devicetreePath?: string;
+  hostRoot?: string;
+}): Promise<StaticInfo> {
   const [system, osInfo, cpu, dtModel, hostOs] = await Promise.all([
     si.system(),
     si.osInfo(),
     si.cpu(),
-    readHardwareModel(),
-    readHostOsRelease(),
+    readHardwareModel(paths?.devicetreePath),
+    readHostOsRelease(paths?.hostRoot),
   ]);
 
   const model =

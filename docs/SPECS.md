@@ -19,7 +19,7 @@ en temps réel l'état de la machine (CPU, RAM, température, disque, réseau).
 | CPU | usage global + par cœur, fréquence, load average (1/5/15 min) |
 | Mémoire | RAM utilisée/disponible/totale, swap |
 | Température | température CPU, seuils visuels (vert/jaune/rouge) |
-| Ventilateur | vitesse en RPM via hwmon (Pi 5 Active Cooler…) — absent si le ventilateur n'a pas de tachymètre (fans GPIO 2 fils) |
+| Ventilateur | vitesse en RPM via hwmon (Pi 5 Active Cooler…), affichée en jauge circulaire avec hélice animée — card masquée si le ventilateur n'a pas de tachymètre (fans GPIO 2 fils) |
 | Disque | espace utilisé/total sur `/` |
 | Réseau | débit rx/tx par seconde (interface principale) |
 | Système | hostname, modèle de Pi, OS/kernel, uptime |
@@ -146,7 +146,28 @@ Lecture seule partout — pas de `--privileged`. `/proc` (CPU, RAM) et `/sys`
   ne dépend jamais du check. Désactivable via `UPDATE_CHECK=false`.
 - **Mise à jour utilisateur** : `docker compose pull && docker compose up -d`.
   Auto-update possible en ajoutant Watchtower côté utilisateur (son choix).
-- **CI** : `ci.yml` build server + client sur chaque PR et push sur `main`.
+- **CI** : `ci.yml` build + tests server et client sur chaque PR et push sur `main`.
+
+## Tests
+
+- **Outillage** : [Vitest](https://vitest.dev/) des deux côtés (+ Testing Library
+  et jsdom côté client), couverture v8 avec **seuils à 100 %** (statements,
+  branches, functions, lines) imposés en CI.
+- **Serveur** (`server/test/`) : unitaires sur la config, le semver/le checker de
+  version (API GitHub mockée en local), chaque collecteur (`systeminformation`
+  mocké) et les lecteurs Pi (device tree, os-release, hwmon — fixtures sur
+  disque) ; le hub WebSocket est testé avec des sockets simulées et des fake
+  timers (cadence, clamp, broadcast multi-clients, déconnexions pendant
+  l'échantillonnage) ; `app.ts` est testé en intégration réelle (HTTP + WS +
+  vrais collecteurs). Exclusions justifiées : `server.ts` (bootstrap du
+  process) et la garde anti-traversal (inatteignable, la normalisation WHATWG
+  des URL la précède).
+- **Client** (`*.test.ts[x]` à côté du code) : formatters, hook `useMetrics`
+  (WebSocket simulée : reconnexion/backoff, messages, envoi d'intervalle),
+  chaque composant (états vides, seuils de couleur, badge de mise à jour…).
+  Exclusion : `main.tsx` (bootstrap DOM).
+- **Commandes** : `npm test` ou `npm run test:coverage` dans `server/` et
+  `client/`.
 
 ## Structure du repo
 
@@ -167,6 +188,17 @@ Dockerfile               # multi-stage
 docker-compose.yml
 docs/SPECS.md            # ce document
 ```
+
+## Affichage du ventilateur
+
+hwmon ne publie pas le régime nominal du ventilateur : une valeur brute en RPM
+ne dit rien sans échelle. La jauge est donc calée sur **8000 RPM** (vitesse max
+de l'Active Cooler du Pi 5) et s'étend automatiquement si un ventilateur tourne
+plus vite, de sorte que le remplissage signifie toujours « à quel point il
+pousse ». L'hélice tourne à une vitesse **indicative** : à plein régime un
+ventilateur fait ~130 tours/seconde, irreprésentable à l'écran, donc la plage
+est ramenée à 2,5 s → 0,12 s par tour. L'animation respecte
+`prefers-reduced-motion`.
 
 ## Conventions
 

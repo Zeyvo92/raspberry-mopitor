@@ -56,6 +56,9 @@ cd server && npm install && npm run dev
 cd client && npm install && npm run dev
 ```
 
+Tests (Vitest, 100% coverage enforced in CI): `npm test` in `server/` and
+`client/`, or `npm run test:coverage` for the report.
+
 ## Configuration
 
 | Env var | Default | Description |
