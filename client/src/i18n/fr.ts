@@ -1,0 +1,90 @@
+import type { Dictionary } from "./en";
+
+export const fr: Dictionary = {
+  // header
+  "header.connected": "connecté",
+  "header.disconnected": "déconnecté — reconnexion",
+  "header.uptime": "actif depuis",
+  "header.refresh": "rafraîchissement",
+  "header.refreshHint": "Intervalle d'échantillonnage — partagé par tous les clients",
+  "header.updateAvailable": "v{version} disponible",
+  "header.updateHint": "Vous utilisez la v{current} — la v{latest} est disponible",
+  "header.language": "Langue",
+
+  // tabs
+  "tab.dashboard": "Tableau de bord",
+  "tab.history": "Historique",
+  "tab.processes": "Processus",
+  "tab.containers": "Conteneurs",
+
+  // connection states
+  "state.connecting": "Connexion…",
+  "state.waiting": "En attente des métriques…",
+  "state.loading": "Chargement…",
+
+  // cards
+  "cpu.title": "Processeur",
+  "cpu.loadAvg": "charge moy. {values}",
+  "cpu.core": "c{index}",
+  "memory.title": "Mémoire",
+  "memory.ram": "RAM",
+  "memory.swap": "swap",
+  "memory.sub": "sur {total} · {available} disponibles",
+  "temperature.title": "Température",
+  "temperature.cpu": "CPU",
+  "temperature.throttle": "⚠ proche du seuil de bridage",
+  "temperature.noSensor": "Aucune sonde disponible",
+  "temperature.fan": "ventilateur",
+  "temperature.fanStopped": "(à l'arrêt)",
+  "disk.title": "Disque ({mount})",
+  "disk.sub": "sur {total}",
+  "network.title": "Réseau ({iface})",
+  "network.download": "descendant",
+  "network.upload": "montant",
+
+  // history
+  "history.range": "plage",
+  "history.disabled":
+    "L'historique est désactivé sur ce serveur (HISTORY=false, ou base de données inaccessible).",
+  "history.empty": "Aucun échantillon enregistré sur cette plage pour le moment.",
+  "history.recording": "un échantillon toutes les {interval} · conservé {hours} h",
+  "history.cpu": "Charge CPU",
+  "history.temperature": "Température CPU",
+  "history.memory": "Mémoire utilisée",
+  "history.network": "Débit réseau",
+  "history.min": "min",
+  "history.avg": "moy",
+  "history.max": "max",
+  "history.now": "actuel",
+  "range.15m": "15 min",
+  "range.1h": "1 h",
+  "range.6h": "6 h",
+  "range.24h": "24 h",
+  "range.7d": "7 jours",
+
+  // processes
+  "processes.title": "Processus principaux",
+  "processes.summary": "{total} processus · {running} actifs · {sleeping} en veille",
+  "processes.sortBy": "trier par",
+  "processes.pid": "PID",
+  "processes.name": "Processus",
+  "processes.user": "Utilisateur",
+  "processes.cpu": "CPU",
+  "processes.memory": "Mémoire",
+  "processes.command": "Commande",
+  "processes.empty": "Pas encore de données sur les processus.",
+
+  // containers
+  "containers.title": "Conteneurs Docker",
+  "containers.summary": "{running} en cours · {total} au total",
+  "containers.name": "Conteneur",
+  "containers.image": "Image",
+  "containers.state": "État",
+  "containers.cpu": "CPU",
+  "containers.memory": "Mémoire",
+  "containers.network": "Réseau",
+  "containers.uptime": "Actif",
+  "containers.empty": "Aucun conteneur sur cet hôte.",
+  "containers.unavailable":
+    "Le socket Docker n'est pas monté — voir docker-compose.yml pour activer les stats des conteneurs.",
+};

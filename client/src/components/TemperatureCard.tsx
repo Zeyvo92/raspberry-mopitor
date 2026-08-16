@@ -1,3 +1,4 @@
+import { useI18n } from "../i18n";
 import type { FanMetrics, TemperatureMetrics } from "../types";
 import { Bar, BigValue, Card } from "./Card";
 
@@ -13,17 +14,20 @@ export function TemperatureCard({
   temperature: TemperatureMetrics;
   fan: FanMetrics;
 }) {
+  const { t } = useI18n();
   const { cpu } = temperature;
 
   return (
-    <Card title="Temperature">
+    <Card title={t("temperature.title")}>
       {cpu === null && fan.rpm === null ? (
-        <p className="text-sm text-zinc-500">No sensor available</p>
+        <p className="text-sm text-zinc-500">{t("temperature.noSensor")}</p>
       ) : (
         <>
           {cpu !== null && (
             <>
-              <BigValue sub={cpu >= CRIT ? "⚠ approaching throttle limit" : "CPU"}>
+              <BigValue
+                sub={cpu >= CRIT ? t("temperature.throttle") : t("temperature.cpu")}
+              >
                 {cpu.toFixed(1)}°C
               </BigValue>
               <Bar
@@ -35,11 +39,11 @@ export function TemperatureCard({
           )}
           {fan.rpm !== null && (
             <p className={`text-xs text-zinc-500 ${cpu !== null ? "mt-3" : ""}`}>
-              fan{" "}
+              {t("temperature.fan")}{" "}
               <span className="font-mono text-zinc-300">
                 {fan.rpm.toLocaleString()} RPM
               </span>
-              {fan.rpm === 0 && <span className="ml-1">(stopped)</span>}
+              {fan.rpm === 0 && <span className="ml-1">{t("temperature.fanStopped")}</span>}
             </p>
           )}
         </>
