@@ -12,5 +12,15 @@ services:
       REFRESH_INTERVAL_MS: "1000"
       DISK_PATH: /host
       HOST_ROOT: /host
+      HISTORY_INTERVAL_MS: "10000"
+      HISTORY_RETENTION_HOURS: "168"
     volumes:
       - /:/host:ro
+      - mopitor-data:/data
+      # see docker-compose.yml for what mounting the Docker socket implies
+      # - /var/run/docker.sock:/var/run/docker.sock:ro
+    # group_add:
+    #   - "999"
+
+volumes:
+  mopitor-data:

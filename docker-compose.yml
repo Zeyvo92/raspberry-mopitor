@@ -18,5 +18,21 @@ services:
       # are read from there so they reflect the Pi, not the container
       DISK_PATH: /host
       HOST_ROOT: /host
+      # history: one sample every 10s, kept a week (~5 MB of SQLite)
+      HISTORY_INTERVAL_MS: "10000"
+      HISTORY_RETENTION_HOURS: "168"
     volumes:
       - /:/host:ro
+      # keeps the history database across container updates
+      - mopitor-data:/data
+      # The Containers tab needs the Docker socket. Mounting it hands this
+      # container root-equivalent control of the daemon, so it is opt-in:
+      # uncomment the mount *and* group_add with your host's docker group id
+      # (getent group docker | cut -d: -f3) so the unprivileged "node" user
+      # is allowed to read the socket.
+      # - /var/run/docker.sock:/var/run/docker.sock:ro
+    # group_add:
+    #   - "999"
+
+volumes:
+  mopitor-data:
