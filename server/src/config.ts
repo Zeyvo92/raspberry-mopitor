@@ -7,6 +7,12 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 export const MIN_INTERVAL_MS = 100;
 export const MAX_INTERVAL_MS = 60_000;
 
+/** history windows a client may ask for: 1 minute … 30 days */
+export const MIN_HISTORY_RANGE_MS = 60_000;
+export const MAX_HISTORY_RANGE_MS = 30 * 24 * 60 * 60 * 1000;
+/** points returned per history query — enough for a smooth chart, small on the wire */
+export const HISTORY_MAX_POINTS = 360;
+
 export function clampInterval(ms: number): number {
   return Math.min(Math.max(Math.round(ms), MIN_INTERVAL_MS), MAX_INTERVAL_MS);
 }
@@ -16,6 +22,12 @@ function intEnv(name: string, fallback: number, min: number): number {
   const value = raw ? Number.parseInt(raw, 10) : NaN;
   if (Number.isNaN(value)) return fallback;
   return Math.max(value, min);
+}
+
+function boolEnv(name: string, fallback: boolean): boolean {
+  const raw = process.env[name]?.trim().toLowerCase();
+  if (raw === undefined || raw === "") return fallback;
+  return raw !== "false" && raw !== "0" && raw !== "no";
 }
 
 export const config = {
@@ -33,9 +45,31 @@ export const config = {
   /** where the built SPA lives */
   staticDir: process.env.STATIC_DIR ?? path.resolve(here, "../../client/dist"),
   /** set UPDATE_CHECK=false to disable the GitHub release check entirely */
-  updateCheck: (process.env.UPDATE_CHECK ?? "true").toLowerCase() !== "false",
+  updateCheck: boolEnv("UPDATE_CHECK", true),
   /** repo whose releases define "latest" — override in forks */
   updateCheckRepo: process.env.UPDATE_CHECK_REPO ?? "Zeyvo92/raspberry-mopitor",
   /** GitHub API base; overridable for tests and GitHub Enterprise */
   updateCheckApiBase: process.env.UPDATE_CHECK_API ?? "https://api.github.com",
+
+  /** HISTORY=false keeps the monitor strictly live: nothing is written to disk */
+  history: boolEnv("HISTORY", true),
+  /** SQLite file; needs a writable volume in Docker (see docker-compose.yml) */
+  historyDb: process.env.HISTORY_DB ?? path.resolve(here, "../data/history.db"),
+  /** one row every N ms — 10s ≈ 5 MB for a week of retention */
+  historyIntervalMs: intEnv("HISTORY_INTERVAL_MS", 10_000, 1000),
+  /** rows older than this are pruned automatically */
+  historyRetentionHours: intEnv("HISTORY_RETENTION_HOURS", 168, 1),
+
+  /** PROCESSES=false hides the process list entirely */
+  processes: boolEnv("PROCESSES", true),
+  /** scanning /proc for every process is the priciest collector: keep it slow */
+  processesIntervalMs: intEnv("PROCESSES_INTERVAL_MS", 3000, 500),
+  /** rows kept per sort key (the union of top-CPU and top-memory is sent) */
+  processesTopN: intEnv("PROCESSES_TOP_N", 12, 1),
+
+  /** DOCKER_STATS=false skips container stats even if the socket is mounted */
+  dockerStats: boolEnv("DOCKER_STATS", true),
+  /** read by systeminformation too — a single var configures both */
+  dockerSocket: process.env.DOCKER_SOCKET ?? "/var/run/docker.sock",
+  dockerIntervalMs: intEnv("DOCKER_INTERVAL_MS", 3000, 500),
 };

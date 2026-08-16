@@ -8,6 +8,8 @@ import { collectNetwork } from "./network.js";
 import { collectTemperature } from "./temperature.js";
 
 export { collectStaticInfo } from "./system.js";
+export { collectProcesses } from "./processes.js";
+export { collectContainers, isDockerAvailable } from "./docker.js";
 
 export async function collectSnapshot(): Promise<MetricsSnapshot> {
   const [cpu, memory, temperature, fan, disk, network, time] =

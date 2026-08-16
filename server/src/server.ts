@@ -3,6 +3,8 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 import { WebSocketServer } from "ws";
 import { config } from "./config.js";
+import { HistoryRecorder } from "./history/recorder.js";
+import { openHistoryStore } from "./history/store.js";
 import { startUpdateChecker } from "./version.js";
 import { Hub } from "./ws/hub.js";
 
@@ -50,8 +52,20 @@ async function serveStatic(
 
 const server = http.createServer((req, res) => void serveStatic(req, res));
 
+// Opened before the first client connects so the "static" message can tell
+// the UI whether the history tab has anything to show.
+const history = config.history
+  ? await openHistoryStore({
+      file: config.historyDb,
+      intervalMs: config.historyIntervalMs,
+      retentionHours: config.historyRetentionHours,
+    })
+  : null;
+const recorder = history ? new HistoryRecorder(history, config.historyIntervalMs) : null;
+recorder?.start();
+
 const wss = new WebSocketServer({ server, path: "/ws" });
-const hub = new Hub();
+const hub = new Hub({ history, recorder });
 wss.on("connection", (ws) => void hub.add(ws));
 
 startUpdateChecker();
@@ -61,11 +75,18 @@ server.listen(config.port, () => {
   console.log(
     `refresh: ${config.refreshIntervalMs}ms · disk: ${config.diskPath} · static: ${config.staticDir}`,
   );
+  console.log(
+    history
+      ? `history: ${config.historyDb} · every ${config.historyIntervalMs}ms · kept ${config.historyRetentionHours}h`
+      : "history: disabled (live metrics only)",
+  );
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     server.close();
+    recorder?.stop();
+    history?.close();
     process.exit(0);
   });
 }

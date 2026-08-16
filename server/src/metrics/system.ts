@@ -4,7 +4,7 @@ import { promises as fs } from "node:fs";
 import si from "systeminformation";
 import { config } from "../config.js";
 import { getAppInfo } from "../version.js";
-import type { StaticInfo } from "../types.js";
+import type { Features, StaticInfo } from "../types.js";
 
 // The device tree is exposed by the kernel and is not namespaced: readable
 // from inside a container, it names the real board (e.g. "Raspberry Pi 4
@@ -40,8 +40,11 @@ export async function readHostOsRelease(
   }
 }
 
-/** Sent on connect: hardware/OS info plus the current version-check state. */
-export async function collectStaticInfo(): Promise<StaticInfo> {
+/**
+ * Sent on connect: hardware/OS info, the current version-check state and the
+ * feature flags the hub resolved (history database, Docker socket…).
+ */
+export async function collectStaticInfo(features: Features): Promise<StaticInfo> {
   const [system, osInfo, cpu, dtModel, hostOs] = await Promise.all([
     si.system(),
     si.osInfo(),
@@ -59,6 +62,7 @@ export async function collectStaticInfo(): Promise<StaticInfo> {
 
   return {
     app: getAppInfo(),
+    features,
     hostname: os.hostname(),
     model,
     os: osName,

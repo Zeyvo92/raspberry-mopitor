@@ -1,14 +1,15 @@
 {
   "name": "raspberry-mopitor-server",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "Raspberry Pi monitoring server — pushes live system metrics over WebSocket",
+  "description": "Raspberry Pi monitoring server \u2014 pushes live system metrics over WebSocket",
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "typecheck": "tsc --noEmit"
+    "test": "node --import tsx --test \"test/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.test.json"
   },
   "dependencies": {
     "systeminformation": "^5.23.0",
