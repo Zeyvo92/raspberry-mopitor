@@ -165,6 +165,10 @@ function reduce(state: MetricsState, message: ServerMessage): MetricsState {
       return { ...state, processes: message.data };
     case "containers":
       return { ...state, containers: message.data };
+    default:
+      // a newer server may push a message this client predates: ignore it
+      // rather than dropping the state on the floor
+      return state;
   }
 }
 
@@ -202,5 +206,6 @@ function extend(
   const points = series.points.filter((p) => p.ts >= cutoff);
   points.push(point);
 
-  return { ...series, from: points[0]?.ts ?? series.from, points };
+  // non-empty by construction: the point we just added is in there
+  return { ...series, from: points[0]!.ts, points };
 }

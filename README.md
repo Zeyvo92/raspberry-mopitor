@@ -81,8 +81,8 @@ cd server && npm install && npm run dev
 cd client && npm install && npm run dev
 ```
 
-`npm test` (in `server/`) runs the unit tests; `npm run typecheck` runs the
-TypeScript checks that CI runs on every PR.
+Tests (Vitest, 100% coverage enforced in CI): `npm test` in `server/` and
+`client/`, or `npm run test:coverage` for the report.
 
 ## Configuration
 

@@ -9,22 +9,12 @@ const STATE_STYLES: Record<string, string> = {
   exited: "border-zinc-700 bg-zinc-800/60 text-zinc-400",
 };
 
-export function ContainerTable({
-  containers,
-  available,
-}: {
-  containers: ContainerList | null;
-  available: boolean;
-}) {
+/**
+ * Only rendered when the server reported a reachable Docker socket — the tab
+ * itself is hidden otherwise, so there is no "unavailable" state to handle.
+ */
+export function ContainerTable({ containers }: { containers: ContainerList | null }) {
   const { t } = useI18n();
-
-  if (!available) {
-    return (
-      <p className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 text-sm text-zinc-400">
-        {t("containers.unavailable")}
-      </p>
-    );
-  }
 
   const list = containers?.list ?? [];
   const running = list.filter((container) => container.state === "running").length;

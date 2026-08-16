@@ -126,19 +126,14 @@ export function HistoryChart({
               <Tooltip
                 cursor={{ stroke: CHART_CHROME.cursor, strokeWidth: 1 }}
                 isAnimationActive={false}
-                content={({ active, payload }) => {
-                  // read the bucket straight off the hovered datum rather than
-                  // looking it up by timestamp — no scan, and no mismatch
-                  const point = payload?.[0]?.payload as HistoryPoint | undefined;
-                  return active && point ? (
-                    <ChartTooltip
-                      point={point}
-                      series={series}
-                      formatValue={formatValue}
-                      locale={locale}
-                    />
-                  ) : null;
-                }}
+                // Recharts clones this element with { active, payload }
+                content={
+                  <ChartTooltip
+                    series={series}
+                    formatValue={formatValue}
+                    locale={locale}
+                  />
+                }
               />
               {series.map((s) => (
                 <Area
@@ -168,17 +163,28 @@ export function HistoryChart({
   );
 }
 
-function ChartTooltip({
-  point,
-  series,
-  formatValue,
-  locale,
-}: {
-  point: HistoryPoint;
+export interface ChartTooltipProps {
+  /** injected by Recharts when the pointer is over the plot */
+  active?: boolean;
+  payload?: { payload?: HistoryPoint }[];
   series: ChartSeries[];
   formatValue: (value: number) => string;
   locale: string;
-}) {
+}
+
+/** One row per series: the value leads, the series name follows. */
+export function ChartTooltip({
+  active,
+  payload,
+  series,
+  formatValue,
+  locale,
+}: ChartTooltipProps) {
+  // read the bucket straight off the hovered datum rather than looking it up
+  // by timestamp — no scan, and no mismatch
+  const point = payload?.[0]?.payload;
+  if (!active || !point) return null;
+
   return (
     <div className="rounded-lg border border-zinc-700 bg-zinc-900/95 px-3 py-2 shadow-lg">
       <p className="mb-1 text-xs text-zinc-500">{formatTimestamp(point.ts, locale)}</p>

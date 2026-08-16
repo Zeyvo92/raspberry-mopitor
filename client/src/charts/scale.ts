@@ -27,6 +27,12 @@ function decimalStep(raw: number): number {
 }
 
 function series(from: number, to: number, step: number): number[] {
+  // A zero (or denormal) step would never reach `to`. Both callers size the
+  // step off a non-zero span, so this only guards a future one against an
+  // infinite loop.
+  /* v8 ignore start */
+  if (!(step > 0)) return [from];
+  /* v8 ignore stop */
   const ticks: number[] = [];
   for (let value = from; value <= to + step / 2; value += step) {
     ticks.push(Math.round(value * 1000) / 1000);
@@ -55,10 +61,15 @@ export function scaleAround(
 ): Scale {
   const low = min - pad;
   const high = max + pad;
-  const step = decimalStep(Math.max(high - low, Number.EPSILON) / intervals);
+  // a perfectly flat series has no span to divide: size the step off the
+  // value itself so the reading still sits inside a sensible window
+  const span = high - low || Math.abs(high) || 1;
+  const step = decimalStep(span / intervals);
   const bottom = Math.floor(low / step) * step;
-  const top = Math.ceil(high / step) * step;
-  return { domain: [bottom, top], ticks: series(bottom, top, step) };
+  // readings sitting exactly on a step boundary would collapse the window
+  const top = Math.ceil(high / step) * step || bottom + step;
+  const ceiling = top === bottom ? bottom + step : top;
+  return { domain: [bottom, ceiling], ticks: series(bottom, ceiling, step) };
 }
 
 /** highest recorded value for a metric, 0 when the range holds no sample */

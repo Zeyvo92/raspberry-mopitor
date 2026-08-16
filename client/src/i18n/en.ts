@@ -33,8 +33,12 @@ export const en = {
   "temperature.cpu": "CPU",
   "temperature.throttle": "⚠ approaching throttle limit",
   "temperature.noSensor": "No sensor available",
-  "temperature.fan": "fan",
-  "temperature.fanStopped": "(stopped)",
+  "fan.title": "Fan",
+  "fan.unit": "rpm",
+  "fan.stopped": "Fan stopped",
+  "fan.running": "Fan at {rpm} RPM",
+  "fan.stoppedNote": "stopped · below threshold",
+  "fan.share": "{percent}% of {max} rpm",
   "disk.title": "Disk ({mount})",
   "disk.sub": "of {total}",
   "network.title": "Network ({iface})",
@@ -84,8 +88,6 @@ export const en = {
   "containers.network": "Network",
   "containers.uptime": "Up",
   "containers.empty": "No containers on this host.",
-  "containers.unavailable":
-    "The Docker socket is not mounted — see docker-compose.yml to enable container stats.",
 } as const;
 
 export type TranslationKey = keyof typeof en;

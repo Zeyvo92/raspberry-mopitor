@@ -1,5 +1,5 @@
 import { useI18n } from "../i18n";
-import type { FanMetrics, TemperatureMetrics } from "../types";
+import type { TemperatureMetrics } from "../types";
 import { Bar, BigValue, Card } from "./Card";
 
 // Pi CPUs throttle around 80-85°C
@@ -9,43 +9,28 @@ const SCALE_MAX = 90;
 
 export function TemperatureCard({
   temperature,
-  fan,
 }: {
   temperature: TemperatureMetrics;
-  fan: FanMetrics;
 }) {
   const { t } = useI18n();
   const { cpu } = temperature;
 
   return (
     <Card title={t("temperature.title")}>
-      {cpu === null && fan.rpm === null ? (
+      {cpu === null ? (
         <p className="text-sm text-zinc-500">{t("temperature.noSensor")}</p>
       ) : (
         <>
-          {cpu !== null && (
-            <>
-              <BigValue
-                sub={cpu >= CRIT ? t("temperature.throttle") : t("temperature.cpu")}
-              >
-                {cpu.toFixed(1)}°C
-              </BigValue>
-              <Bar
-                value={(cpu / SCALE_MAX) * 100}
-                warn={(WARN / SCALE_MAX) * 100}
-                crit={(CRIT / SCALE_MAX) * 100}
-              />
-            </>
-          )}
-          {fan.rpm !== null && (
-            <p className={`text-xs text-zinc-500 ${cpu !== null ? "mt-3" : ""}`}>
-              {t("temperature.fan")}{" "}
-              <span className="font-mono text-zinc-300">
-                {fan.rpm.toLocaleString()} RPM
-              </span>
-              {fan.rpm === 0 && <span className="ml-1">{t("temperature.fanStopped")}</span>}
-            </p>
-          )}
+          <BigValue
+            sub={cpu >= CRIT ? t("temperature.throttle") : t("temperature.cpu")}
+          >
+            {cpu.toFixed(1)}°C
+          </BigValue>
+          <Bar
+            value={(cpu / SCALE_MAX) * 100}
+            warn={(WARN / SCALE_MAX) * 100}
+            crit={(CRIT / SCALE_MAX) * 100}
+          />
         </>
       )}
     </Card>

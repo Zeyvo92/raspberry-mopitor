@@ -19,6 +19,12 @@ export function SystemHeader({
 }) {
   const { t } = useI18n();
   const status = connected ? t("header.connected") : t("header.disconnected");
+  const app = info?.app;
+  // a badge with no version to name would say nothing: require both
+  const newRelease =
+    app?.updateAvailable && app.latestVersion
+      ? { current: app.version, latest: app.latestVersion, url: app.releaseUrl }
+      : null;
 
   return (
     <header className="mb-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
@@ -33,18 +39,18 @@ export function SystemHeader({
             aria-label={status}
             title={status}
           />
-          {info?.app.updateAvailable && (
+          {newRelease && (
             <a
-              href={info.app.releaseUrl ?? "#"}
+              href={newRelease.url ?? "#"}
               target="_blank"
               rel="noreferrer"
               className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-400 hover:bg-amber-500/20"
               title={t("header.updateHint", {
-                current: info.app.version,
-                latest: info.app.latestVersion ?? "",
+                current: newRelease.current,
+                latest: newRelease.latest,
               })}
             >
-              {t("header.updateAvailable", { version: info.app.latestVersion ?? "" })} ↗
+              {t("header.updateAvailable", { version: newRelease.latest })} ↗
             </a>
           )}
         </h1>

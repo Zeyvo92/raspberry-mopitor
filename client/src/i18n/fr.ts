@@ -34,8 +34,12 @@ export const fr: Dictionary = {
   "temperature.cpu": "CPU",
   "temperature.throttle": "⚠ proche du seuil de bridage",
   "temperature.noSensor": "Aucune sonde disponible",
-  "temperature.fan": "ventilateur",
-  "temperature.fanStopped": "(à l'arrêt)",
+  "fan.title": "Ventilateur",
+  "fan.unit": "tr/min",
+  "fan.stopped": "Ventilateur à l'arrêt",
+  "fan.running": "Ventilateur à {rpm} tr/min",
+  "fan.stoppedNote": "à l'arrêt · sous le seuil",
+  "fan.share": "{percent}% de {max} tr/min",
   "disk.title": "Disque ({mount})",
   "disk.sub": "sur {total}",
   "network.title": "Réseau ({iface})",
@@ -85,6 +89,4 @@ export const fr: Dictionary = {
   "containers.network": "Réseau",
   "containers.uptime": "Actif",
   "containers.empty": "Aucun conteneur sur cet hôte.",
-  "containers.unavailable":
-    "Le socket Docker n'est pas monté — voir docker-compose.yml pour activer les stats des conteneurs.",
 };

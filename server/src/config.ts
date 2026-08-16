@@ -24,10 +24,11 @@ function intEnv(name: string, fallback: number, min: number): number {
   return Math.max(value, min);
 }
 
+/** every switch follows the same rule: only the literal "false" turns it off */
 function boolEnv(name: string, fallback: boolean): boolean {
   const raw = process.env[name]?.trim().toLowerCase();
   if (raw === undefined || raw === "") return fallback;
-  return raw !== "false" && raw !== "0" && raw !== "no";
+  return raw !== "false";
 }
 
 export const config = {

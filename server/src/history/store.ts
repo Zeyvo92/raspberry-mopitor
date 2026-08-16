@@ -82,11 +82,14 @@ const SELECT = `
   ORDER BY bucket_ts;
 `;
 
-/** SQLite hands back null | number | bigint | string | Uint8Array */
+/**
+ * SQLite hands back a union (null | number | bigint | string | Uint8Array).
+ * This schema only ever produces numbers — AVG/MAX over REAL and INTEGER
+ * columns small enough to stay exact — or null when a bucket holds no reading
+ * for that sensor.
+ */
 function num(value: unknown): number | null {
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  if (typeof value === "bigint") return Number(value);
-  return null;
+  return typeof value === "number" ? value : null;
 }
 
 function round(value: number | null, decimals = 1): number | null {
@@ -167,7 +170,7 @@ export async function openHistoryStore(
       const byBucket = new Map<number, HistoryPoint>();
       try {
         for (const row of select.all(bucketMs, bucketMs, from)) {
-          const ts = num(row["bucket_ts"]) ?? 0;
+          const ts = Number(row["bucket_ts"]);
           byBucket.set(ts, {
             ts,
             cpu: round(num(row["cpu"])),

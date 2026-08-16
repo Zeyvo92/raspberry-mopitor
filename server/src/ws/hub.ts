@@ -66,33 +66,36 @@ export class Hub {
     this.history = history;
     this.recorder = recorder;
 
-    this.metricsLoop = new PollLoop(
-      this.intervalMs,
-      collectSnapshot,
-      (data) => {
+    this.metricsLoop = new PollLoop({
+      intervalMs: this.intervalMs,
+      label: "metrics",
+      collect: collectSnapshot,
+      shouldRun: () => this.clients.size > 0,
+      emit: (data) => {
         this.recorder?.offer(data);
         this.broadcast({ type: "metrics", data });
       },
-      "metrics",
-    );
-    this.processLoop = new PollLoop(
-      config.processesIntervalMs,
-      () => collectProcesses(),
-      (data) => {
+    });
+    this.processLoop = new PollLoop({
+      intervalMs: config.processesIntervalMs,
+      label: "processes",
+      collect: () => collectProcesses(),
+      shouldRun: () => this.hasSubscriber("processes"),
+      emit: (data) => {
         this.lastProcesses = data;
         this.broadcastTopic("processes", { type: "processes", data });
       },
-      "processes",
-    );
-    this.containerLoop = new PollLoop(
-      config.dockerIntervalMs,
-      collectContainers,
-      (data) => {
+    });
+    this.containerLoop = new PollLoop({
+      intervalMs: config.dockerIntervalMs,
+      label: "containers",
+      collect: collectContainers,
+      shouldRun: () => this.hasSubscriber("containers"),
+      emit: (data) => {
         this.lastContainers = data;
         this.broadcastTopic("containers", { type: "containers", data });
       },
-      "containers",
-    );
+    });
   }
 
   async add(ws: WebSocket): Promise<void> {
@@ -101,7 +104,10 @@ export class Hub {
     ws.on("error", () => this.remove(ws));
     ws.on("message", (raw) => this.onMessage(ws, raw));
 
-    send(ws, { type: "static", data: await collectStaticInfo(await this.features()) });
+    send(ws, {
+      type: "static",
+      data: await collectStaticInfo(await this.features()),
+    });
     send(ws, this.configMessage());
 
     this.metricsLoop.start();

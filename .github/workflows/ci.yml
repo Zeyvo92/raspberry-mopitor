@@ -23,5 +23,6 @@ jobs:
           cache-dependency-path: ${{ matrix.app }}/package-lock.json
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test --if-present
       - run: npm run build
+      # 100% coverage on all four axes is enforced by vitest thresholds
+      - run: npm run test:coverage

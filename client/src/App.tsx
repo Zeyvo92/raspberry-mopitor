@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { CpuCard } from "./components/CpuCard";
 import { ContainerTable } from "./components/ContainerTable";
 import { DiskCard } from "./components/DiskCard";
+import { FanCard } from "./components/FanCard";
 import { MemoryCard } from "./components/MemoryCard";
 import { NetworkCard } from "./components/NetworkCard";
 import { ProcessTable } from "./components/ProcessTable";
@@ -90,7 +91,9 @@ export default function App() {
             <main className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <CpuCard cpu={metrics.cpu} />
               <MemoryCard memory={metrics.memory} />
-              <TemperatureCard temperature={metrics.temperature} fan={metrics.fan} />
+              <TemperatureCard temperature={metrics.temperature} />
+              {/* only hardware with a tachometer reports a speed */}
+              {metrics.fan.rpm !== null && <FanCard fan={metrics.fan} />}
               <DiskCard disk={metrics.disk} />
               <NetworkCard network={metrics.network} />
             </main>
@@ -117,12 +120,7 @@ export default function App() {
 
         {activeTab === "processes" && <ProcessTable processes={processes} />}
 
-        {activeTab === "containers" && (
-          <ContainerTable
-            containers={containers}
-            available={features?.containers ?? false}
-          />
-        )}
+        {activeTab === "containers" && <ContainerTable containers={containers} />}
       </div>
     </div>
   );
