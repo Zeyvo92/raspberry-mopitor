@@ -4,8 +4,13 @@ Live monitoring dashboard for Raspberry Pi — a lightweight local web page show
 CPU usage (global + per core), RAM, CPU temperature, disk usage, network throughput
 and system info, pushed in real time over WebSocket.
 
-Built with Node.js/TypeScript (`systeminformation` + `ws`, no HTTP framework) and
-React + Vite + Tailwind. Full design notes in [docs/SPECS.md](docs/SPECS.md) (French).
+Beyond the live view it keeps a **history** (charts over 15 min → 7 days), lists the
+**top processes**, and — when you opt in — shows **per-container Docker stats**.
+The UI is available in English and French (auto-detected from the browser).
+
+Built with Node.js/TypeScript (`systeminformation` + `ws` + the built-in `node:sqlite`,
+no HTTP framework) and React + Vite + Tailwind + Recharts. Full design notes in
+[docs/SPECS.md](docs/SPECS.md) (French).
 
 ## Run with Docker (recommended)
 
@@ -21,7 +26,24 @@ Open `http://<pi-address>:8585`.
 
 The compose file uses `network_mode: host`, `pid: host` and a read-only mount of
 `/` so the metrics reflect the **host Pi**, not the container. No `--privileged`
-needed.
+needed. A named volume (`mopitor-data`) holds the history database so it survives
+container updates.
+
+### Enabling the Containers tab
+
+Per-container stats read the Docker socket, which the compose file does **not**
+mount by default: doing so gives the container root-equivalent control of the
+daemon. If you want the tab, uncomment in `docker-compose.yml`:
+
+```yaml
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    group_add:
+      - "999"   # getent group docker | cut -d: -f3
+```
+
+`group_add` is what lets the unprivileged `node` user read the socket. Without
+the mount the tab simply doesn't appear.
 
 ## Updating
 
@@ -48,6 +70,9 @@ docker compose -f docker-compose.build.yml up -d --build
 
 ## Run for development
 
+Node.js 24 is recommended (Node 22.5+ works; older runtimes run fine but
+without history, which needs the built-in `node:sqlite`).
+
 ```bash
 # terminal 1 — server (http://localhost:8585)
 cd server && npm install && npm run dev
@@ -67,14 +92,33 @@ Tests (Vitest, 100% coverage enforced in CI): `npm test` in `server/` and
 | `REFRESH_INTERVAL_MS` | `1000` | initial sampling interval, clamped to [`100`, `60000`] |
 | `DISK_PATH` | `/` | mount point to report (`/host` in Docker) |
 | `HOST_ROOT` | `/host` | host root mount, used to read the host's `/etc/os-release` (falls back to the local one) |
+| `HWMON_ROOT` | `/sys/class/hwmon` | kernel hwmon root, where the fan tachometer is read |
 | `STATIC_DIR` | `../client/dist` | built SPA location |
 | `UPDATE_CHECK` | `true` | set `false` to disable the release check |
 | `UPDATE_CHECK_REPO` | `Zeyvo92/raspberry-mopitor` | repo whose releases define "latest" (for forks) |
+| `HISTORY` | `true` | set `false` to keep the monitor strictly live (nothing written to disk) |
+| `HISTORY_DB` | `server/data/history.db` | SQLite file (`/data/history.db` in Docker) |
+| `HISTORY_INTERVAL_MS` | `10000` | how often a sample is stored |
+| `HISTORY_RETENTION_HOURS` | `168` | older samples are pruned automatically |
+| `PROCESSES` | `true` | set `false` to hide the process list |
+| `PROCESSES_INTERVAL_MS` | `3000` | process sampling interval (only while the tab is open) |
+| `PROCESSES_TOP_N` | `12` | rows kept per sort key (top CPU ∪ top memory is sent) |
+| `DOCKER_STATS` | `true` | set `false` to skip container stats even if the socket is mounted |
+| `DOCKER_SOCKET` | `/var/run/docker.sock` | Docker socket path |
+| `DOCKER_INTERVAL_MS` | `3000` | container stats interval (only while the tab is open) |
 
 The refresh rate is shown in the dashboard header and can be changed live
 (100ms → 10s presets); the value is shared by all connected viewers.
-Metrics are only sampled while at least one browser is connected — an idle
-monitor costs the Pi nothing.
+
+## What it costs the Pi
+
+- **Live metrics** are only sampled while at least one browser is connected.
+- **Processes and container stats** are only collected while someone is looking
+  at their tab, and at their own slower interval.
+- **History** is the one loop that keeps running with nobody connected — that is
+  the point of it — but it samples every 10 s by default, reuses the snapshots
+  the live loop already collected when a viewer is watching, and writes ~5 MB of
+  SQLite per week. `HISTORY=false` turns it off entirely.
 
 ## Releasing (maintainers)
 
@@ -87,8 +131,8 @@ monitor costs the Pi nothing.
 
 ## Roadmap
 
-- **v2**: history + charts (Recharts), top processes, per-container Docker stats,
-  threshold alerts. See [docs/SPECS.md](docs/SPECS.md).
+- **v2** ✅ history + charts, top processes, per-container Docker stats
+- **next**: threshold alerts (mail/webhook). See [docs/SPECS.md](docs/SPECS.md).
 
 ## License
 

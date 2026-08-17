@@ -1,5 +1,7 @@
 import { formatUptime } from "../format";
+import { useI18n } from "../i18n";
 import type { ConfigInfo, StaticInfo } from "../types";
+import { LanguageSelect } from "./LanguageSelect";
 import { RefreshControl } from "./RefreshControl";
 
 export function SystemHeader({
@@ -15,26 +17,40 @@ export function SystemHeader({
   connected: boolean;
   onChangeInterval: (intervalMs: number) => void;
 }) {
+  const { t } = useI18n();
+  const status = connected ? t("header.connected") : t("header.disconnected");
+  const app = info?.app;
+  // a badge with no version to name would say nothing: require both
+  const newRelease =
+    app?.updateAvailable && app.latestVersion
+      ? { current: app.version, latest: app.latestVersion, url: app.releaseUrl }
+      : null;
+
   return (
     <header className="mb-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-      <div>
-        <h1 className="text-xl font-bold text-zinc-100">
-          {info?.hostname ?? "raspberry-mopitor"}
+      <div className="min-w-0">
+        <h1 className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xl font-bold text-zinc-100">
+          <span className="truncate">{info?.hostname ?? "raspberry-mopitor"}</span>
           <span
-            className={`ml-2 inline-block h-2.5 w-2.5 rounded-full align-middle ${
-              connected ? "bg-emerald-500" : "bg-red-500 animate-pulse"
+            className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${
+              connected ? "bg-emerald-500" : "animate-pulse bg-red-500"
             }`}
-            title={connected ? "connected" : "disconnected"}
+            role="status"
+            aria-label={status}
+            title={status}
           />
-          {info?.app.updateAvailable && (
+          {newRelease && (
             <a
-              href={info.app.releaseUrl ?? "#"}
+              href={newRelease.url ?? "#"}
               target="_blank"
               rel="noreferrer"
-              className="ml-3 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 align-middle text-xs font-medium text-amber-400 hover:bg-amber-500/20"
-              title={`You are running v${info.app.version} — v${info.app.latestVersion} is available`}
+              className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-400 hover:bg-amber-500/20"
+              title={t("header.updateHint", {
+                current: newRelease.current,
+                latest: newRelease.latest,
+              })}
             >
-              v{info.app.latestVersion} available ↗
+              {t("header.updateAvailable", { version: newRelease.latest })} ↗
             </a>
           )}
         </h1>
@@ -45,11 +61,13 @@ export function SystemHeader({
           </p>
         )}
       </div>
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         {config && <RefreshControl config={config} onChange={onChangeInterval} />}
+        <LanguageSelect />
         {uptime !== null && (
           <p className="text-xs text-zinc-500">
-            up <span className="font-mono text-zinc-300">{formatUptime(uptime)}</span>
+            {t("header.uptime")}{" "}
+            <span className="font-mono text-zinc-300">{formatUptime(uptime)}</span>
           </p>
         )}
       </div>

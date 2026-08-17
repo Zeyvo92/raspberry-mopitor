@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { fanScaleMax, spinDurationSeconds } from "../fan";
+import { useI18n } from "../i18n";
 import type { FanMetrics } from "../types";
 import { Card } from "./Card";
 import { Gauge } from "./Gauge";
@@ -29,6 +30,7 @@ function FanBlades({ turnSeconds }: { turnSeconds: number | null }) {
 }
 
 export function FanCard({ fan }: { fan: FanMetrics }) {
+  const { t } = useI18n();
   const rpm = fan.rpm ?? 0;
   // Grows if this fan turns out to spin faster than the nominal maximum;
   // a ref keeps it across ticks without forcing extra renders.
@@ -39,10 +41,10 @@ export function FanCard({ fan }: { fan: FanMetrics }) {
   const stopped = rpm === 0;
 
   return (
-    <Card title="Fan">
+    <Card title={t("fan.title")}>
       <Gauge
         value={share}
-        label={stopped ? "Fan stopped" : `Fan at ${rpm} RPM`}
+        label={stopped ? t("fan.stopped") : t("fan.running", { rpm })}
         color={stopped ? "stroke-zinc-600" : "stroke-sky-400"}
       >
         <FanBlades turnSeconds={spinDurationSeconds(rpm, observedMax.current)} />
@@ -50,13 +52,16 @@ export function FanCard({ fan }: { fan: FanMetrics }) {
           {rpm.toLocaleString()}
         </div>
         <div className="text-[0.65rem] uppercase tracking-wider text-zinc-500">
-          rpm
+          {t("fan.unit")}
         </div>
       </Gauge>
       <p className="mt-2 text-center text-xs text-zinc-500">
         {stopped
-          ? "stopped · below threshold"
-          : `${share.toFixed(0)}% of ${observedMax.current.toLocaleString()} rpm`}
+          ? t("fan.stoppedNote")
+          : t("fan.share", {
+              percent: share.toFixed(0),
+              max: observedMax.current.toLocaleString(),
+            })}
       </p>
     </Card>
   );

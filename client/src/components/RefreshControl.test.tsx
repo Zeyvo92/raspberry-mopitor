@@ -1,8 +1,9 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { CONFIG, renderWithI18n as render } from "../test-utils";
 import { formatInterval, RefreshControl } from "./RefreshControl";
 
-const config = { refreshIntervalMs: 1000, minIntervalMs: 100, maxIntervalMs: 60000 };
+const config = CONFIG;
 
 describe("formatInterval", () => {
   it("uses ms below a second, seconds above", () => {
@@ -35,7 +36,7 @@ describe("RefreshControl", () => {
   it("filters presets outside the server bounds", () => {
     render(
       <RefreshControl
-        config={{ refreshIntervalMs: 1000, minIntervalMs: 500, maxIntervalMs: 5000 }}
+        config={{ ...config, minIntervalMs: 500, maxIntervalMs: 5000 }}
         onChange={() => {}}
       />,
     );

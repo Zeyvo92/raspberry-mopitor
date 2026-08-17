@@ -1,5 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { renderWithI18n as render } from "../test-utils";
 import { FanCard } from "./FanCard";
 import { Gauge } from "./Gauge";
 

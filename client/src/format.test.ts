@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { formatBytes, formatRate, formatUptime, percent } from "./format";
+import {
+  formatAxisTime,
+  formatBytes,
+  formatBytesShort,
+  formatRate,
+  formatTimestamp,
+  formatUptime,
+  percent,
+} from "./format";
 
 describe("formatBytes", () => {
   it("handles zero and negative values", () => {
@@ -39,5 +47,27 @@ describe("percent", () => {
   it("computes and guards against a zero total", () => {
     expect(percent(50, 200)).toBe(25);
     expect(percent(1, 0)).toBe(0);
+  });
+});
+
+describe("chart formatting", () => {
+  it("compacts bytes for axis ticks", () => {
+    expect(formatBytesShort(0)).toBe("0");
+    expect(formatBytesShort(512)).toBe("512");
+    expect(formatBytesShort(1536)).toBe("1.5K");
+    expect(formatBytesShort(4 * 1024 ** 3)).toBe("4G");
+  });
+
+  it("shows clock time inside a day and the date beyond it", () => {
+    const ts = Date.UTC(2026, 3, 20, 14, 30);
+    expect(formatAxisTime(ts, 3600_000, "en-GB")).toMatch(/\d{2}:\d{2}/);
+    // a week-long range needs the day, not just the hour
+    expect(formatAxisTime(ts, 7 * 24 * 3600_000, "en-GB")).toMatch(/20\/04/);
+  });
+
+  it("spells the full moment in the tooltip, in the reader's locale", () => {
+    const ts = Date.UTC(2026, 3, 20, 14, 30, 5);
+    expect(formatTimestamp(ts, "en-GB")).toMatch(/20\/04/);
+    expect(formatTimestamp(ts, "fr-FR")).toMatch(/20\/04/);
   });
 });

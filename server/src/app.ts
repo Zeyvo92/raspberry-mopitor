@@ -3,7 +3,7 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 import { WebSocketServer } from "ws";
 import { config } from "./config.js";
-import { Hub } from "./ws/hub.js";
+import { Hub, type HubOptions } from "./ws/hub.js";
 
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -51,11 +51,17 @@ export async function serveStatic(
   }
 }
 
-/** HTTP static serving + /ws upgrade wired to a Hub. Not listening yet. */
-export function createApp(): http.Server {
+/**
+ * HTTP static serving + /ws upgrade wired to a Hub. Not listening yet.
+ *
+ * The history store is passed in rather than opened here: it is asynchronous
+ * and process-wide, so the bootstrap owns its lifetime and tests get a hub
+ * with history disabled by default.
+ */
+export function createApp(options: HubOptions = {}): http.Server {
   const server = http.createServer((req, res) => void serveStatic(req, res));
   const wss = new WebSocketServer({ server, path: "/ws" });
-  const hub = new Hub();
+  const hub = new Hub(options);
   wss.on("connection", (ws) => void hub.add(ws));
   return server;
 }

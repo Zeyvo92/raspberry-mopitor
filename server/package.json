@@ -3,7 +3,7 @@
   "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "Raspberry Pi monitoring server — pushes live system metrics over WebSocket",
+  "description": "Raspberry Pi monitoring server \u2014 pushes live system metrics over WebSocket",
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.build.json",

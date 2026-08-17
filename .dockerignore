@@ -1,0 +1,9 @@
+# keep the build context small and reproducible: everything the image needs is
+# built inside it from package-lock.json + sources
+**/node_modules
+**/dist
+**/data
+.git
+.github
+docs
+*.md

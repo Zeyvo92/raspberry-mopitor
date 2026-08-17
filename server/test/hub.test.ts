@@ -6,6 +6,9 @@ import type { ServerMessage } from "../src/types.js";
 const metrics = vi.hoisted(() => ({
   collectStaticInfo: vi.fn(),
   collectSnapshot: vi.fn(),
+  collectProcesses: vi.fn(),
+  collectContainers: vi.fn(),
+  isDockerAvailable: vi.fn(),
 }));
 vi.mock("../src/metrics/index.js", () => metrics);
 
@@ -13,6 +16,8 @@ import { Hub } from "../src/ws/hub.js";
 
 const FAKE_STATIC = { hostname: "pi" };
 const FAKE_SNAPSHOT = { ts: 1, cpu: { load: 1 } };
+const FAKE_PROCESSES = { ts: 2, total: 1, running: 1, sleeping: 0, list: [] };
+const FAKE_CONTAINERS = { ts: 3, list: [] };
 
 class FakeSocket extends EventEmitter {
   OPEN = 1;
@@ -42,6 +47,9 @@ beforeEach(() => {
   vi.useFakeTimers();
   metrics.collectStaticInfo.mockResolvedValue(FAKE_STATIC);
   metrics.collectSnapshot.mockResolvedValue(FAKE_SNAPSHOT);
+  metrics.collectProcesses.mockResolvedValue(FAKE_PROCESSES);
+  metrics.collectContainers.mockResolvedValue(FAKE_CONTAINERS);
+  metrics.isDockerAvailable.mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -116,6 +124,7 @@ describe("Hub connection lifecycle", () => {
     const hub = new Hub();
     const ws = new FakeSocket();
     const adding = hub.add(asWs(ws));
+    await vi.advanceTimersByTimeAsync(0); // let add() reach the static await
     ws.disconnect(); // leaves while add() awaits the static info
     release();
     await adding;
@@ -180,6 +189,7 @@ describe("Hub interval control", () => {
     const hub = new Hub();
     const ws = new FakeSocket();
     const adding = hub.add(asWs(ws));
+    await vi.advanceTimersByTimeAsync(0); // let add() reach the static await
     // message handler is live before the static await resolves
     ws.sendToServer({ type: "setInterval", intervalMs: 200 });
     release();
@@ -242,6 +252,159 @@ describe("Hub sampling robustness", () => {
     );
     await vi.advanceTimersByTimeAsync(1000);
     expect(ws.messagesOfType("metrics").length).toBe(1); // next tick succeeded
+    ws.disconnect();
+  });
+});
+
+describe("Hub topics", () => {
+  it("starts a topic loop on the first subscriber and stops it with the last", async () => {
+    const hub = new Hub();
+    const a = new FakeSocket();
+    const b = new FakeSocket();
+    await hub.add(asWs(a));
+    await hub.add(asWs(b));
+
+    a.sendToServer({ type: "subscribe", topics: ["processes"] });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(metrics.collectProcesses).toHaveBeenCalledTimes(1);
+    expect(a.messagesOfType("processes")).toHaveLength(1);
+    expect(b.messagesOfType("processes")).toHaveLength(0); // not subscribed
+
+    metrics.collectProcesses.mockClear();
+    a.sendToServer({ type: "subscribe", topics: [] });
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(metrics.collectProcesses).not.toHaveBeenCalled();
+  });
+
+  it("keeps collecting while another client is still watching", async () => {
+    const hub = new Hub();
+    const a = new FakeSocket();
+    const b = new FakeSocket();
+    await hub.add(asWs(a));
+    await hub.add(asWs(b));
+    a.sendToServer({ type: "subscribe", topics: ["processes"] });
+    b.sendToServer({ type: "subscribe", topics: ["processes"] });
+    await vi.advanceTimersByTimeAsync(0);
+
+    a.disconnect();
+    metrics.collectProcesses.mockClear();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(metrics.collectProcesses).toHaveBeenCalled();
+    expect(b.messagesOfType("processes").length).toBeGreaterThan(1);
+  });
+
+  it("replays the last payload to a client that subscribes late", async () => {
+    const hub = new Hub();
+    const first = new FakeSocket();
+    await hub.add(asWs(first));
+    first.sendToServer({ type: "subscribe", topics: ["processes", "containers"] });
+    await vi.advanceTimersByTimeAsync(0);
+
+    const late = new FakeSocket();
+    await hub.add(asWs(late));
+    late.sendToServer({ type: "subscribe", topics: ["processes", "containers"] });
+    await vi.advanceTimersByTimeAsync(0);
+
+    // no waiting for the next tick: the cached payloads arrive immediately
+    expect(late.messagesOfType("processes")).toHaveLength(1);
+    expect(late.messagesOfType("containers")).toHaveLength(1);
+  });
+
+  it("ignores a topic whose feature the deployment does not offer", async () => {
+    metrics.isDockerAvailable.mockResolvedValue(false);
+    const hub = new Hub();
+    const ws = new FakeSocket();
+    await hub.add(asWs(ws));
+
+    ws.sendToServer({ type: "subscribe", topics: ["containers"] });
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(metrics.collectContainers).not.toHaveBeenCalled();
+    expect(metrics.collectStaticInfo).toHaveBeenCalledWith(
+      expect.objectContaining({ containers: false }),
+    );
+  });
+
+  it("ignores a subscribe message whose topics are not a list", async () => {
+    const hub = new Hub();
+    const ws = new FakeSocket();
+    await hub.add(asWs(ws));
+
+    ws.sendToServer({ type: "subscribe", topics: "processes" });
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(metrics.collectProcesses).not.toHaveBeenCalled();
+  });
+
+  it("drops a subscription that arrives after the client left", async () => {
+    const hub = new Hub();
+    const ws = new FakeSocket();
+    await hub.add(asWs(ws));
+    ws.disconnect();
+
+    ws.sendToServer({ type: "subscribe", topics: ["processes"] });
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(metrics.collectProcesses).not.toHaveBeenCalled();
+  });
+});
+
+describe("Hub history", () => {
+  const series = { rangeMs: 3600_000, bucketMs: 10_000, from: 0, points: [] };
+
+  it("answers a history request from the store", async () => {
+    const history = { query: vi.fn().mockReturnValue(series) };
+    const hub = new Hub({ history: history as never });
+    const ws = new FakeSocket();
+    await hub.add(asWs(ws));
+
+    ws.sendToServer({ type: "getHistory", rangeMs: 3600_000 });
+    expect(history.query).toHaveBeenCalledWith(3600_000);
+    expect(ws.messagesOfType("history")[0]).toEqual({ type: "history", data: series });
+    expect(metrics.collectStaticInfo).toHaveBeenCalledWith(
+      expect.objectContaining({ history: true }),
+    );
+  });
+
+  it("clamps the requested window", async () => {
+    const history = { query: vi.fn().mockReturnValue(series) };
+    const hub = new Hub({ history: history as never });
+    const ws = new FakeSocket();
+    await hub.add(asWs(ws));
+
+    ws.sendToServer({ type: "getHistory", rangeMs: 1 });
+    ws.sendToServer({ type: "getHistory", rangeMs: 10 ** 12 });
+    expect(history.query.mock.calls).toEqual([[60_000], [30 * 24 * 3600_000]]);
+  });
+
+  it("answers an empty series when history is disabled, so nobody waits", async () => {
+    const hub = new Hub();
+    const ws = new FakeSocket();
+    await hub.add(asWs(ws));
+
+    ws.sendToServer({ type: "getHistory", rangeMs: 3600_000 });
+    const [reply] = ws.messagesOfType("history");
+    expect(reply).toMatchObject({ data: { rangeMs: 3600_000, points: [] } });
+    expect(metrics.collectStaticInfo).toHaveBeenCalledWith(
+      expect.objectContaining({ history: false }),
+    );
+  });
+
+  it("ignores a malformed range", async () => {
+    const history = { query: vi.fn().mockReturnValue(series) };
+    const hub = new Hub({ history: history as never });
+    const ws = new FakeSocket();
+    await hub.add(asWs(ws));
+
+    ws.sendToServer({ type: "getHistory", rangeMs: "soon" });
+    expect(history.query).not.toHaveBeenCalled();
+  });
+
+  it("hands every broadcast snapshot to the recorder", async () => {
+    const recorder = { offer: vi.fn() };
+    const hub = new Hub({ recorder: recorder as never });
+    const ws = new FakeSocket();
+    await hub.add(asWs(ws));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(recorder.offer).toHaveBeenCalledWith(FAKE_SNAPSHOT);
     ws.disconnect();
   });
 });

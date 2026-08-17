@@ -1,5 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { renderWithI18n as render } from "../test-utils";
 import { Bar, BigValue, Card, levelColor } from "./Card";
 import { CpuCard } from "./CpuCard";
 import { DiskCard } from "./DiskCard";

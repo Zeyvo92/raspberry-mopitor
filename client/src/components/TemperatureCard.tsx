@@ -1,3 +1,4 @@
+import { useI18n } from "../i18n";
 import type { TemperatureMetrics } from "../types";
 import { Bar, BigValue, Card } from "./Card";
 
@@ -11,15 +12,18 @@ export function TemperatureCard({
 }: {
   temperature: TemperatureMetrics;
 }) {
+  const { t } = useI18n();
   const { cpu } = temperature;
 
   return (
-    <Card title="Temperature">
+    <Card title={t("temperature.title")}>
       {cpu === null ? (
-        <p className="text-sm text-zinc-500">No sensor available</p>
+        <p className="text-sm text-zinc-500">{t("temperature.noSensor")}</p>
       ) : (
         <>
-          <BigValue sub={cpu >= CRIT ? "⚠ approaching throttle limit" : "CPU"}>
+          <BigValue
+            sub={cpu >= CRIT ? t("temperature.throttle") : t("temperature.cpu")}
+          >
             {cpu.toFixed(1)}°C
           </BigValue>
           <Bar

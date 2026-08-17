@@ -89,10 +89,12 @@ describe("readHostOsRelease", () => {
   });
 });
 
+const FEATURES = { history: true, processes: true, containers: false };
+
 describe("collectStaticInfo", () => {
   it("prefers device tree + host os-release over systeminformation", async () => {
     const paths = await piFixtures();
-    const info = await collectStaticInfo(paths);
+    const info = await collectStaticInfo(FEATURES, paths);
     expect(info.model).toBe("Raspberry Pi 5 Model B Rev 1.0");
     expect(info.os).toBe("Raspberry Pi OS Lite (bookworm)");
     expect(info.kernel).toBe("6.6.0");
@@ -101,11 +103,12 @@ describe("collectStaticInfo", () => {
     expect(info.cores).toBe(4);
     expect(info.hostname).toBe(os.hostname());
     expect(info.app).toHaveProperty("version");
+    expect(info.features).toEqual(FEATURES);
   });
 
   it("falls back to systeminformation when Pi sources are absent", async () => {
     si.system.mockResolvedValue({ manufacturer: "LENOVO", model: "ThinkPad" });
-    const info = await collectStaticInfo({
+    const info = await collectStaticInfo(FEATURES, {
       devicetreePath: "/nonexistent",
       hostRoot: "/nonexistent",
     });
@@ -116,7 +119,7 @@ describe("collectStaticInfo", () => {
   it("degrades to Unknown when nothing identifies the machine", async () => {
     si.system.mockResolvedValue({ manufacturer: "", model: "" });
     si.cpu.mockResolvedValue({ manufacturer: "", brand: "", cores: 0 });
-    const info = await collectStaticInfo({
+    const info = await collectStaticInfo(FEATURES, {
       devicetreePath: "/nonexistent",
       hostRoot: "/nonexistent",
     });

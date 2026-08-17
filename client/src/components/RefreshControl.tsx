@@ -1,3 +1,4 @@
+import { useI18n } from "../i18n";
 import type { ConfigInfo } from "../types";
 
 const PRESETS_MS = [100, 200, 500, 1000, 2000, 5000, 10000];
@@ -13,6 +14,7 @@ export function RefreshControl({
   config: ConfigInfo;
   onChange: (intervalMs: number) => void;
 }) {
+  const { t } = useI18n();
   const { refreshIntervalMs, minIntervalMs, maxIntervalMs } = config;
 
   const options = PRESETS_MS.filter(
@@ -26,12 +28,12 @@ export function RefreshControl({
 
   return (
     <label className="flex items-center gap-2 text-xs text-zinc-500">
-      refresh
+      {t("header.refresh")}
       <select
         value={refreshIntervalMs}
         onChange={(e) => onChange(Number(e.target.value))}
         className="cursor-pointer rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 font-mono text-xs text-zinc-300 outline-none hover:border-zinc-700 focus:border-zinc-600"
-        title="Sampling interval — shared by all connected viewers"
+        title={t("header.refreshHint")}
       >
         {options.map((ms) => (
           <option key={ms} value={ms}>

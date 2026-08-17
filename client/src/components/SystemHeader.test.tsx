@@ -1,5 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { CONFIG, renderWithI18n as render } from "../test-utils";
 import type { StaticInfo } from "../types";
 import { SystemHeader } from "./SystemHeader";
 
@@ -10,6 +11,7 @@ const info: StaticInfo = {
     updateAvailable: false,
     releaseUrl: null,
   },
+  features: { history: true, processes: true, containers: false },
   hostname: "raspberry",
   model: "Raspberry Pi 5 Model B Rev 1.0",
   os: "Raspberry Pi OS Lite (bookworm)",
@@ -19,7 +21,7 @@ const info: StaticInfo = {
   cores: 4,
 };
 
-const config = { refreshIntervalMs: 1000, minIntervalMs: 100, maxIntervalMs: 60000 };
+const config = CONFIG;
 
 describe("SystemHeader", () => {
   it("falls back to the app name before static info arrives", () => {
@@ -33,8 +35,11 @@ describe("SystemHeader", () => {
       />,
     );
     expect(screen.getByText("raspberry-mopitor")).toBeInTheDocument();
-    expect(screen.getByTitle("disconnected")).toBeInTheDocument();
-    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.getByTitle(/disconnected/)).toBeInTheDocument();
+    // no config yet, so no refresh control — but the language picker never
+    // depends on the connection
+    expect(screen.queryByTitle(/Sampling interval/)).toBeNull();
+    expect(screen.getByTitle("Language")).toBeInTheDocument();
     expect(screen.queryByText(/^up$/)).toBeNull();
   });
 
@@ -54,7 +59,8 @@ describe("SystemHeader", () => {
       screen.getByText(/v1\.0\.0 · Raspberry Pi 5 Model B Rev 1\.0/),
     ).toBeInTheDocument();
     expect(screen.getByText("1d 1h 1m")).toBeInTheDocument();
-    expect(screen.getByRole("combobox")).toBeInTheDocument();
+    expect(screen.getByTitle(/Sampling interval/)).toBeInTheDocument();
+    expect(screen.getByTitle("Language")).toBeInTheDocument();
     expect(screen.queryByRole("link")).toBeNull(); // up to date -> no badge
   });
 
@@ -112,8 +118,26 @@ describe("SystemHeader", () => {
         onChangeInterval={onChangeInterval}
       />,
     );
-    const select = screen.getByRole("combobox");
+    const select = screen.getByTitle(/Sampling interval/);
     select.dispatchEvent(new Event("change", { bubbles: true }));
     expect(onChangeInterval).toHaveBeenCalled();
+  });
+});
+
+describe("SystemHeader update badge", () => {
+  it("says nothing when the server claims an update without naming it", () => {
+    render(
+      <SystemHeader
+        info={{
+          ...info,
+          app: { ...info.app, updateAvailable: true, latestVersion: null },
+        }}
+        config={config}
+        uptime={null}
+        connected={true}
+        onChangeInterval={() => {}}
+      />,
+    );
+    expect(screen.queryByRole("link")).toBeNull();
   });
 });

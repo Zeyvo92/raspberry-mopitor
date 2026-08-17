@@ -21,8 +21,9 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["src/**"],
-      // main.tsx is the DOM bootstrap; types.ts has no runtime code
-      exclude: ["src/main.tsx", "src/types.ts", "src/test-setup.ts"],
+      // main.tsx is the DOM bootstrap; types.ts has no runtime code;
+      // the rest is test scaffolding
+      exclude: ["src/main.tsx", "src/types.ts", "src/test-setup.ts", "src/test-utils.tsx"],
       thresholds: {
         statements: 100,
         branches: 100,
