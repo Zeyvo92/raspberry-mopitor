@@ -44,8 +44,9 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          # armv7 covers Pis running 32-bit Raspberry Pi OS
-          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          # armv7 (32-bit Raspberry Pi OS) dropped: Node.js 24's official images
+          # no longer publish an arm/v7 build, only amd64/arm64
+          platforms: linux/amd64,linux/arm64
           push: true
           build-args: |
             VERSION=${{ env.VERSION }}
