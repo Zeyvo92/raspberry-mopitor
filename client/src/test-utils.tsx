@@ -26,7 +26,7 @@ export const CONFIG: ConfigInfo = {
 
 export const STATIC_INFO: StaticInfo = {
   app: {
-    version: "0.4.0",
+    version: "0.4.1",
     latestVersion: null,
     updateAvailable: false,
     releaseUrl: null,

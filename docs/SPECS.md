@@ -106,7 +106,7 @@ Endpoint : `GET /ws` (upgrade). Messages du serveur vers le client :
 ```jsonc
 // à la connexion — infos qui ne changent pas
 { "type": "static", "data": {
-  "app": { "version": "0.4.0", "latestVersion": "0.4.1",
+  "app": { "version": "0.4.1", "latestVersion": "0.4.2",
            "updateAvailable": true, "releaseUrl": "https://github.com/..." },
   // ce que ce déploiement sait servir : l'UI masque le reste
   "features": { "history": true, "processes": true, "containers": false },
