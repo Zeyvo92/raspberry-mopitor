@@ -27,6 +27,11 @@ ENV NODE_ENV=production \
     HISTORY_DB=/data/history.db \
     APP_VERSION=$VERSION
 WORKDIR /app
+# Alpine's BusyBox `ps` doesn't support the columns (pcpu, pmem, etime...)
+# that systeminformation needs for the Processes tab: it silently falls back
+# to a degraded parser that reports 0% CPU for every process. procps (the
+# real, GNU-compatible `ps`) fixes that for a couple MB.
+RUN apk add --no-cache procps
 COPY --from=server-build /build/node_modules ./node_modules
 COPY --from=server-build /build/dist ./dist
 COPY --from=server-build /build/package.json ./package.json
