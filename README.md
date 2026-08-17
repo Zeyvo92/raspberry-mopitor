@@ -14,7 +14,7 @@ no HTTP framework) and React + Vite + Tailwind + Recharts. Full design notes in
 
 ## Run with Docker (recommended)
 
-Prebuilt multi-arch images (arm64, armv7, amd64) are published to GHCR on every
+Prebuilt multi-arch images (arm64, amd64) are published to GHCR on every
 release — nothing is compiled on the Pi. You only need the compose file:
 
 ```bash

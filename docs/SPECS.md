@@ -246,7 +246,7 @@ n'apparaît simplement pas.
 ## Distribution & mises à jour
 
 - **Releases** : un tag `vX.Y.Z` poussé déclenche la GitHub Action `release.yml` :
-  build multi-arch (arm64, armv7, amd64) → push sur GHCR
+  build multi-arch (arm64, amd64) → push sur GHCR
   (`ghcr.io/zeyvo92/raspberry-mopitor`, tags `X.Y.Z`, `X.Y`, `latest`)
   → création de la GitHub Release. Rien n'est compilé sur le Pi.
 - **Check de version** : au démarrage puis toutes les 6 h, le serveur interroge
