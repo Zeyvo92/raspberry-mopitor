@@ -49,9 +49,7 @@ describe("FanCard", () => {
     const { container: slow } = render(<FanCard fan={{ rpm: 1000 }} />);
     const { container: fast } = render(<FanCard fan={{ rpm: 7000 }} />);
     const duration = (c: HTMLElement) =>
-      Number.parseFloat(
-        (c.querySelector("svg g[style]") as SVGGElement).style.animationDuration,
-      );
+      Number.parseFloat(c.querySelector("animateTransform")!.getAttribute("dur")!);
     expect(duration(slow)).toBeGreaterThan(duration(fast));
   });
 
@@ -59,8 +57,17 @@ describe("FanCard", () => {
     const { container } = render(<FanCard fan={{ rpm: 0 }} />);
     expect(screen.getByText("stopped · below threshold")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Fan stopped" })).toBeInTheDocument();
-    expect(container.querySelector("svg g[style]")).toBeNull();
+    expect(container.querySelector("animateTransform")).toBeNull();
     expect(filledLength(container)).toBe(0);
+  });
+
+  it("does not animate when the browser asks for reduced motion", () => {
+    const original = globalThis.matchMedia;
+    globalThis.matchMedia = ((query: string) =>
+      ({ matches: true, media: query }) as MediaQueryList) as typeof matchMedia;
+    const { container } = render(<FanCard fan={{ rpm: 4000 }} />);
+    expect(container.querySelector("animateTransform")).toBeNull();
+    globalThis.matchMedia = original;
   });
 
   it("rescales when the fan spins past the nominal maximum", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fanScaleMax, NOMINAL_MAX_RPM, spinDurationSeconds } from "./fan";
+import { fanScaleMax, NOMINAL_MAX_RPM, prefersReducedMotion, spinDurationSeconds } from "./fan";
 
 describe("fanScaleMax", () => {
   it("anchors on the nominal maximum", () => {
@@ -28,5 +28,19 @@ describe("spinDurationSeconds", () => {
   it("stays legible at and beyond full speed", () => {
     expect(spinDurationSeconds(8000, 8000)).toBe(0.12);
     expect(spinDurationSeconds(99999, 8000)).toBe(0.12);
+  });
+});
+
+describe("prefersReducedMotion", () => {
+  it("is false when matchMedia is unavailable", () => {
+    expect(prefersReducedMotion()).toBe(false);
+  });
+
+  it("reflects the media query when matchMedia exists", () => {
+    const original = globalThis.matchMedia;
+    globalThis.matchMedia = ((query: string) =>
+      ({ matches: true, media: query }) as MediaQueryList) as typeof matchMedia;
+    expect(prefersReducedMotion()).toBe(true);
+    globalThis.matchMedia = original;
   });
 });

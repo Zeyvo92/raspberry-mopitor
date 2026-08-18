@@ -1,18 +1,21 @@
 import { useRef } from "react";
-import { fanScaleMax, spinDurationSeconds } from "../fan";
+import { fanScaleMax, prefersReducedMotion, spinDurationSeconds } from "../fan";
 import { useI18n } from "../i18n";
 import type { FanMetrics } from "../types";
 import { Card } from "./Card";
 import { Gauge } from "./Gauge";
 
-/** Three-blade propeller, spun by CSS at a speed that tracks the RPM. */
+/**
+ * Three-blade propeller, spun at a speed that tracks the RPM. This uses a
+ * native SVG <animateTransform> rather than a CSS `transform` keyframe
+ * animation: Chromium intermittently fails to repaint an SVG group whose
+ * `transform` is CSS-animated, which left only the hub dot visible mid-spin.
+ */
 function FanBlades({ turnSeconds }: { turnSeconds: number | null }) {
+  const spinning = turnSeconds !== null && !prefersReducedMotion();
   return (
     <svg viewBox="-16 -16 32 32" className="h-12 w-12" aria-hidden="true">
-      <g
-        className="origin-center fill-sky-400/80 motion-safe:animate-[mopitor-spin_linear_infinite]"
-        style={turnSeconds ? { animationDuration: `${turnSeconds}s` } : undefined}
-      >
+      <g className="fill-sky-400/80">
         {[0, 120, 240].map((angle) => (
           <ellipse
             key={angle}
@@ -23,6 +26,16 @@ function FanBlades({ turnSeconds }: { turnSeconds: number | null }) {
             transform={`rotate(${angle})`}
           />
         ))}
+        {spinning && (
+          <animateTransform
+            attributeName="transform"
+            type="rotate"
+            from="0 0 0"
+            to="360 0 0"
+            dur={`${turnSeconds}s`}
+            repeatCount="indefinite"
+          />
+        )}
       </g>
       <circle r="2.4" className="fill-zinc-400" />
     </svg>
