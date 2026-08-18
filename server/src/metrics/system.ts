@@ -6,14 +6,17 @@ import { config } from "../config.js";
 import { getAppInfo } from "../version.js";
 import type { Features, StaticInfo } from "../types.js";
 
-// The device tree is exposed by the kernel and is not namespaced: readable
-// from inside a container, it names the real board (e.g. "Raspberry Pi 4
-// Model B Rev 1.4"). si.system() can't be trusted in Docker — it returns
-// the literal string "Docker Container" as the model.
-const DEVICETREE_MODEL = "/sys/firmware/devicetree/base/model";
-
+// The device tree is exposed by the kernel and names the real board (e.g.
+// "Raspberry Pi 4 Model B Rev 1.4"). si.system() can't be trusted in Docker
+// — it returns the literal string "Docker Container" as the model. The
+// container's own /sys is a separate namespace from the host's, so this has
+// to be read through the read-only host mount ("/host" in the compose file),
+// same as readHostOsRelease() does for /etc/os-release.
 export async function readHardwareModel(
-  devicetreePath: string = DEVICETREE_MODEL,
+  devicetreePath: string = path.join(
+    config.hostRoot,
+    "sys/firmware/devicetree/base/model",
+  ),
 ): Promise<string | null> {
   try {
     // NUL-terminated string, not plain text
