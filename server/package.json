@@ -1,6 +1,6 @@
 {
   "name": "raspberry-mopitor-server",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": true,
   "type": "module",
   "description": "Raspberry Pi monitoring server \u2014 pushes live system metrics over WebSocket",
