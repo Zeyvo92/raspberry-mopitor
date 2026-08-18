@@ -23,3 +23,9 @@ export function spinDurationSeconds(rpm: number, maxRpm: number): number | null 
   const seconds = SLOWEST_TURN_S - (SLOWEST_TURN_S - FASTEST_TURN_S) * ratio;
   return Math.round(seconds * 100) / 100;
 }
+
+// The propeller spins via SMIL (<animateTransform>, see FanCard), which
+// unlike CSS animation/transition doesn't pause itself for this preference.
+export function prefersReducedMotion(): boolean {
+  return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
