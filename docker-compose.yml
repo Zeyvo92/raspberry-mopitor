@@ -14,8 +14,9 @@ services:
     environment:
       PORT: "8585"
       REFRESH_INTERVAL_MS: "1000"
-      # host root is mounted read-only below: disk usage and os-release
-      # are read from there so they reflect the Pi, not the container
+      # host root is mounted read-only below: filesystem usage, os-release
+      # and — where the container's own /sys hides it — the firmware throttle
+      # register are read from there, so they reflect the Pi, not the container
       DISK_PATH: /host
       HOST_ROOT: /host
       # history: one sample every 10s, kept a week (~5 MB of SQLite)

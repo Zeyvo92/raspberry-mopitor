@@ -4,9 +4,18 @@ Live monitoring dashboard for Raspberry Pi — a lightweight local web page show
 CPU usage (global + per core), RAM, CPU temperature, disk usage, network throughput
 and system info, pushed in real time over WebSocket.
 
+It also reads what a Pi alone can tell you: the firmware **throttle register**
+(under-voltage, capped clock, thermal limit — now and since boot), the **power
+draw** of a Pi 5, extra **temperature probes** (NVMe, PMIC), the cpufreq
+**governor** and the **wear** on the SD card. Disk and network are reported in
+full: every mounted filesystem, disk read/write throughput, every interface and
+the Wi-Fi signal level.
+
 Beyond the live view it keeps a **history** (charts over 15 min → 7 days), lists the
 **top processes**, and — when you opt in — shows **per-container Docker stats**.
-The UI is available in English and French (auto-detected from the browser).
+The UI is available in English and French (auto-detected from the browser), in a
+light or dark theme, installable as an app, with a **kiosk mode** for a Pi driving
+a small screen.
 
 Built with Node.js/TypeScript (`systeminformation` + `ws` + the built-in `node:sqlite`,
 no HTTP framework) and React + Vite + Tailwind + Recharts. Full design notes in
@@ -92,7 +101,11 @@ Tests (Vitest, 100% coverage enforced in CI): `npm test` in `server/` and
 | `REFRESH_INTERVAL_MS` | `1000` | initial sampling interval, clamped to [`100`, `60000`] |
 | `DISK_PATH` | `/` | mount point to report (`/host` in Docker) |
 | `HOST_ROOT` | `/host` | host root mount, used to read the host's `/etc/os-release` (falls back to the local one) |
-| `HWMON_ROOT` | `/sys/class/hwmon` | kernel hwmon root, where the fan tachometer is read |
+| `HWMON_ROOT` | `/sys/class/hwmon` | kernel hwmon root: fan tachometer, extra temperature probes and power rails |
+| `THROTTLE_PATH` | *(auto)* | firmware throttle register; empty means the usual Pi locations, `/host` included |
+| `CPUFREQ_ROOT` | `/sys/devices/system/cpu` | where the governor and the maximum clock are published |
+| `BLOCK_ROOT` | `/sys/block` | sysfs block devices, where SD/eMMC wear is published |
+| `PROC_NET_WIRELESS` | `/proc/net/wireless` | Wi-Fi link quality and signal level |
 | `STATIC_DIR` | `../client/dist` | built SPA location |
 | `UPDATE_CHECK` | `true` | set `false` to disable the release check |
 | `UPDATE_CHECK_REPO` | `Zeyvo92/raspberry-mopitor` | repo whose releases define "latest" (for forks) |
@@ -110,9 +123,26 @@ Tests (Vitest, 100% coverage enforced in CI): `npm test` in `server/` and
 The refresh rate is shown in the dashboard header and can be changed live
 (100ms → 10s presets); the value is shared by all connected viewers.
 
+## Using the dashboard
+
+- **Theme** — system, light or dark, next to the language picker; the choice is
+  remembered in the browser.
+- **Kiosk mode** — the ⛶ button (or `http://<pi-address>:8585/?kiosk=1`) drops
+  the tabs and controls, enlarges the cards, hides the cursor and goes
+  fullscreen where the browser allows it. Escape leaves.
+- **Install it** — the dashboard ships a web app manifest and a service worker,
+  so any browser can add it to a home screen or launch it in its own window. The
+  worker is network-first: it never serves a stale build, it only keeps the
+  interface openable while the Pi is unreachable.
+- **Throttling** — a red banner appears on every tab while the firmware reports
+  under-voltage or throttling, and an amber one when it reported either since
+  boot. On a Pi, that banner usually means the power supply, not the workload.
+
 ## What it costs the Pi
 
 - **Live metrics** are only sampled while at least one browser is connected.
+  CPU, memory, disk and network readings come from `/proc` and `statfs(2)`
+  directly — no shell is spawned per tick, which matters at a 100 ms refresh.
 - **Processes and container stats** are only collected while someone is looking
   at their tab, and at their own slower interval.
 - **History** is the one loop that keeps running with nobody connected — that is
@@ -132,6 +162,8 @@ The refresh rate is shown in the dashboard header and can be changed live
 ## Roadmap
 
 - **v2** ✅ history + charts, top processes, per-container Docker stats
+- **v2.1** ✅ throttling/under-voltage, power draw, extra probes, every
+  filesystem and interface, light theme, PWA, kiosk mode
 - **next**: threshold alerts (mail/webhook). See [docs/SPECS.md](docs/SPECS.md).
 
 ## License
