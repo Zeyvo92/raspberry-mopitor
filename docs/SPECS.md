@@ -40,7 +40,7 @@ conserve l'historique et détaille processus et conteneurs.
 | Fonction | Détail |
 |---|---|
 | Bridage | registre `get_throttled` du firmware : sous-tension, fréquence plafonnée, bridage, seuil thermique doux — état instantané **et** latché depuis le boot. Bandeau d'alerte sur tous les onglets |
-| Consommation | watts lus dans hwmon : `power1_input` (µW) ou paires `inN_input`/`currN_input` du PMIC (Pi 5), total + top 5 des rails |
+| Consommation | watts lus dans hwmon : `power1_input` (µW) ou paires `inN_input`/`currN_input` du PMIC (Pi 5), total + top 5 des rails (estimation ailleurs, voir v2.2) |
 | Sondes | températures autres que le SoC (NVMe, PMIC) listées sous la card Température |
 | CPU | gouverneur cpufreq et fréquence maximale, lus à la connexion |
 | Stockage | modèle de la carte SD/eMMC et usure estimée (`life_time`, par paliers de 10 %) |
@@ -50,6 +50,15 @@ conserve l'historique et détaille processus et conteneurs.
 | PWA | manifeste + service worker *network-first* : installable, ouvrable Pi éteint |
 | Kiosque | `?kiosk=1` ou bouton : plein écran, sans onglets ni curseur, cards agrandies |
 | Processus | filtre texte (nom / utilisateur / commande) et sparkline CPU par processus |
+
+### v2.2 — consommation électrique (livré)
+
+| Fonction | Détail |
+|---|---|
+| Puissance estimée | les cartes sans PMIC (Pi 4 et antérieurs) n'ont aucun capteur : la puissance y est **modélisée** à partir du profil de la carte (repos → pleine charge, table dans `metrics/power.ts`) et de la charge CPU. Marquée `source: "estimate"` jusque dans l'UI (« ≈ 4,6 W »), calibrable au wattmètre via `POWER_IDLE_W`/`POWER_MAX_W`, désactivable avec `POWER_ESTIMATE=false` |
+| Énergie | intégration watts × temps en Wh, cumulée **par jour local** et persistée dans l'historique : aujourd'hui, 7 jours, 30 jours, total, plus la puissance moyenne. Portée par la boucle `history`, la seule qui tourne sans navigateur connecté |
+| Coût | `ENERGY_PRICE` (prix du kWh) et `ENERGY_CURRENCY` affichent le coût de chaque fenêtre ; sans prix, seuls les kWh sont montrés |
+| Graphe | la puissance est enregistrée dans `samples.power` et tracée dans l'onglet Historique (masquée si la machine n'a jamais rapporté un watt) |
 
 ### Plus tard
 
@@ -121,9 +130,17 @@ d'environnement — c'est ce qui rend ces collecteurs testables sur fixtures.
 
 ### Historique
 
-- Table unique `samples(ts PRIMARY KEY, cpu, cpu_temp, mem_*, disk_*, net_*, fan_rpm)`.
-  `ts` en clé primaire = pas d'index supplémentaire, les requêtes par plage sont
-  des parcours de rowid.
+- Table `samples(ts PRIMARY KEY, cpu, cpu_temp, mem_*, disk_*, net_*, fan_rpm,
+  power)`. `ts` en clé primaire = pas d'index supplémentaire, les requêtes par
+  plage sont des parcours de rowid.
+- Table `energy(day PRIMARY KEY, wh, seconds)` : un compteur par jour local,
+  écrit à chaque échantillon. Trois ordres de grandeur plus petite que
+  `samples`, elle n'est **pas** purgée — un compteur de consommation qui
+  redémarre à zéro chaque semaine ne servirait à rien.
+- Les colonnes ajoutées après coup (`samples.power`) le sont par migration
+  explicite au démarrage (`PRAGMA table_info` + `ALTER TABLE`) : `CREATE TABLE
+  IF NOT EXISTS` ne touche pas une base existante, et personne ne doit perdre
+  une semaine d'historique en mettant à jour.
 - `PRAGMA journal_mode=WAL` + `synchronous=NORMAL` : écritures courtes et peu
   d'usure de carte SD, au prix des toutes dernières secondes en cas de coupure.
 - **Downsampling en SQL** : `GROUP BY (ts / bucket) * bucket` avec
@@ -187,8 +204,14 @@ Endpoint : `GET /ws` (upgrade). Messages du serveur vers le client :
                          "throttled": true, "softTempLimit": false },
                 "sinceBoot": { "underVoltage": true, "freqCapped": false,
                                "throttled": true, "softTempLimit": false } },
-  // null sans capteur (seul le PMIC du Pi 5 en a un)
-  "power": { "watts": 7.65, "rails": [ { "name": "EXT5V", "watts": 6 } ] }
+  // null si la carte ne mesure ni ne modélise sa consommation
+  // source: "sensor" (PMIC/wattmètre) ou "estimate" (profil de carte + charge)
+  "power": { "watts": 7.65, "source": "sensor",
+             "rails": [ { "name": "EXT5V", "watts": 6 } ] },
+  // null tant que le compteur n'a rien accumulé (ou HISTORY=false)
+  "energy": { "todayKwh": 0.12, "weekKwh": 0.84, "monthKwh": 3.6,
+              "totalKwh": 12.5, "since": "2026-08-01", "avgWatts": 5.1,
+              "pricePerKwh": 0.2516, "currency": "€" }
 } }
 
 // réponse à "getHistory" — série agrégée, trous compris
@@ -197,7 +220,8 @@ Endpoint : `GET /ws` (upgrade). Messages du serveur vers le client :
   "points": [ { "ts": 1723296400000, "cpu": 12.5, "cpuTemp": 52.1,
                 "memUsed": 0, "memTotal": 0, "swapUsed": 0,
                 "diskUsed": 0, "diskTotal": 0,
-                "netRx": 0, "netTx": 0, "fanRpm": 3241 } ] } }
+                "netRx": 0, "netTx": 0, "fanRpm": 3241,
+                "power": 7.65 } ] } }
 
 // topic "processes" — union du top N CPU et du top N mémoire
 { "type": "processes", "data": {
@@ -237,11 +261,10 @@ l'abonnement et la dernière plage demandée.
 - **Onglets** : Dashboard (cards live) · Historique (graphes) · Processus ·
   Conteneurs. Les deux derniers ne s'affichent que si la feature est disponible,
   et l'abonnement WebSocket suit l'onglet ouvert.
-- **Graphes** : le sélecteur de plage est unique et au-dessus des quatre
-  graphes ; les points live prolongent la série entre deux requêtes (un point
+- **Graphes** : le sélecteur de plage est unique et au-dessus des graphes ; les points live prolongent la série entre deux requêtes (un point
   par bucket, pour garder une densité homogène) ; `syncId` synchronise le
-  curseur des quatre graphes, ce qui permet de corréler un pic CPU avec la
-  température et le réseau.
+  curseur de tous les graphes, ce qui permet de corréler un pic CPU avec la
+  température, le réseau et la puissance appelée.
 - **Couleurs** : teintes choisies dans la bande de luminosité sombre
   (OKLCH L 0.48-0.67) et vérifiées avec un validateur de palette contre le fond
   des cards (#121215). Le seul graphe à deux séries est le réseau :
@@ -296,7 +319,12 @@ l'abonnement et la dernière plage demandée.
 | `UPDATE_CHECK` | `true` | `false` pour désactiver le check de version |
 | `UPDATE_CHECK_REPO` | `Zeyvo92/raspberry-mopitor` | repo dont les releases font référence (forks) |
 | `APP_VERSION` | *(auto)* | version affichée — injectée dans l'image Docker depuis le tag git, sinon lue dans `package.json` |
-| `HISTORY` | `true` | `false` : aucune écriture disque, monitoring strictement live |
+| `POWER_ESTIMATE` | `true` | `false` : pas de puissance modélisée sur les cartes sans capteur |
+| `POWER_IDLE_W` | *(profil)* | consommation au repos, en watts — remplace le profil de la carte |
+| `POWER_MAX_W` | *(profil)* | consommation à pleine charge, en watts |
+| `ENERGY_PRICE` | `0` | prix du kWh ; `0` = aucun coût affiché |
+| `ENERGY_CURRENCY` | `€` | symbole affiché à côté des coûts (aucune conversion) |
+| `HISTORY` | `true` | `false` : aucune écriture disque, monitoring strictement live (donc pas de compteur d'énergie) |
 | `HISTORY_DB` | `server/data/history.db` | fichier SQLite (`/data/history.db` en Docker, sur un volume nommé) |
 | `HISTORY_INTERVAL_MS` | `10000` | période d'enregistrement (≈ 5 Mo par semaine) |
 | `HISTORY_RETENTION_HOURS` | `168` | au-delà, les échantillons sont purgés |
@@ -394,10 +422,11 @@ server/                  # backend Node/TS
     ws/loop.ts           # boucle collecte→diffusion démarrable/arrêtable
     history/store.ts     # SQLite : écriture, agrégation, purge
     history/recorder.ts  # échantillonnage périodique (réutilise le live)
+    history/energy.ts    # intégration watts→Wh, compteurs par jour local
     metrics/             # un collecteur par domaine + agrégateur index.ts
       sysfs.ts           # lectures sysfs tolérantes partagées
       throttle.ts        # registre de bridage du firmware
-      power.ts           # rails d'alimentation (hwmon)
+      power.ts           # rails d'alimentation (hwmon) + estimation par carte
   test/
     fixtures.ts          # arborescences sysfs/procfs jetables
 client/                  # frontend React/Vite/TS
@@ -444,4 +473,6 @@ est ramenée à 2,5 s → 0,12 s par tour. L'animation respecte
 3. **v2** — historique/graphes ✅ · processus ✅ · conteneurs Docker ✅
 4. **v2.1** — bridage/sous-tension ✅ · consommation ✅ · sondes et gouverneur ✅
    · réseau et disque complets ✅ · thème clair ✅ · PWA ✅ · kiosque ✅
-5. **v2.x** — alertes par seuil (mail/webhook)
+5. **v2.2** — puissance estimée hors Pi 5 ✅ · compteurs d'énergie et coût ✅
+   · courbe de puissance dans l'historique ✅
+6. **v2.x** — alertes par seuil (mail/webhook)

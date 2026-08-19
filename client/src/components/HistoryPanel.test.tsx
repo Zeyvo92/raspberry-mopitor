@@ -31,6 +31,7 @@ const point = (ts: number, over: Partial<HistoryPoint> = {}): HistoryPoint => ({
   netRx: 1000,
   netTx: 500,
   fanRpm: 3000,
+  power: 4.2,
   ...over,
 });
 
@@ -46,6 +47,7 @@ const CHART_TITLES = [
   "CPU temperature",
   "Memory used",
   "Network throughput",
+  "Power draw",
 ];
 
 function renderPanel(props: Partial<Parameters<typeof HistoryPanel>[0]> = {}) {
@@ -121,6 +123,27 @@ describe("HistoryPanel", () => {
       series: { ...series, points: [point(0), point(10_000, { memTotal: null })] },
     });
     expect(screen.getByText("4G")).toBeInTheDocument();
+  });
+
+  it("labels the power axis in watts, whole ones above ten", () => {
+    renderPanel({
+      series: {
+        ...series,
+        points: [point(0, { power: 12 }), point(10_000, { power: 3 })],
+      },
+    });
+    // the axis runs 0 → 15 in steps of 5, and the summary reads the same way
+    expect(screen.getByText("15 W")).toBeInTheDocument();
+    expect(screen.getByText("0 W")).toBeInTheDocument();
+    expect(screen.getAllByText("5.0 W").length).toBeGreaterThan(0);
+    expect(screen.getByText("12 W")).toBeInTheDocument(); // the peak drawn
+  });
+
+  it("drops the power chart on a board that never reported a watt", () => {
+    renderPanel({
+      series: { ...series, points: [point(0, { power: null })] },
+    });
+    expect(screen.queryByRole("heading", { name: "Power draw" })).toBeNull();
   });
 
   it("falls back to the peak when no bucket carries the RAM total", () => {

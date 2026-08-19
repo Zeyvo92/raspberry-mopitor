@@ -61,4 +61,5 @@ export const SNAPSHOT: MetricsSnapshot = {
   network: { iface: "eth0", rxSec: 0, txSec: 0, interfaces: [], wifi: null },
   throttle: null,
   power: null,
+  energy: null,
 };

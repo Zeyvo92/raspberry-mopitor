@@ -6,12 +6,16 @@ and system info, pushed in real time over WebSocket.
 
 It also reads what a Pi alone can tell you: the firmware **throttle register**
 (under-voltage, capped clock, thermal limit — now and since boot), the **power
-draw** of a Pi 5, extra **temperature probes** (NVMe, PMIC), the cpufreq
-**governor** and the **wear** on the SD card. Disk and network are reported in
+draw** — measured on a Pi 5, modelled from the board and the CPU load
+everywhere else — and the **energy** it adds up to (kWh today, this week, this
+month, with the bill if you tell it your tariff). Plus extra **temperature
+probes** (NVMe, PMIC), the cpufreq **governor** and the **wear** on the SD
+card. Disk and network are reported in
 full: every mounted filesystem, disk read/write throughput, every interface and
 the Wi-Fi signal level.
 
-Beyond the live view it keeps a **history** (charts over 15 min → 7 days), lists the
+Beyond the live view it keeps a **history** (charts over 15 min → 7 days, power
+included), lists the
 **top processes**, and — when you opt in — shows **per-container Docker stats**.
 The UI is available in English and French (auto-detected from the browser), in a
 light or dark theme, installable as an app, with a **kiosk mode** for a Pi driving
@@ -106,10 +110,15 @@ Tests (Vitest, 100% coverage enforced in CI): `npm test` in `server/` and
 | `CPUFREQ_ROOT` | `/sys/devices/system/cpu` | where the governor and the maximum clock are published |
 | `BLOCK_ROOT` | `/sys/block` | sysfs block devices, where SD/eMMC wear is published |
 | `PROC_NET_WIRELESS` | `/proc/net/wireless` | Wi-Fi link quality and signal level |
+| `POWER_ESTIMATE` | `true` | set `false` to hide the modelled draw on boards with no power sensor |
+| `POWER_IDLE_W` | *(board profile)* | draw at idle in watts — overrides the profile, e.g. measured with a wattmeter |
+| `POWER_MAX_W` | *(board profile)* | draw with every core busy, in watts |
+| `ENERGY_PRICE` | `0` | price of a kWh; `0` shows the kWh without any cost |
+| `ENERGY_CURRENCY` | `€` | symbol printed next to a cost (no conversion is done) |
 | `STATIC_DIR` | `../client/dist` | built SPA location |
 | `UPDATE_CHECK` | `true` | set `false` to disable the release check |
 | `UPDATE_CHECK_REPO` | `Zeyvo92/raspberry-mopitor` | repo whose releases define "latest" (for forks) |
-| `HISTORY` | `true` | set `false` to keep the monitor strictly live (nothing written to disk) |
+| `HISTORY` | `true` | set `false` to keep the monitor strictly live (nothing written to disk — and no energy counters) |
 | `HISTORY_DB` | `server/data/history.db` | SQLite file (`/data/history.db` in Docker) |
 | `HISTORY_INTERVAL_MS` | `10000` | how often a sample is stored |
 | `HISTORY_RETENTION_HOURS` | `168` | older samples are pruned automatically |
@@ -134,6 +143,14 @@ The refresh rate is shown in the dashboard header and can be changed live
   so any browser can add it to a home screen or launch it in its own window. The
   worker is network-first: it never serves a stale build, it only keeps the
   interface openable while the Pi is unreachable.
+- **Consumption** — a Pi 5 measures itself through its PMIC and the card shows
+  each rail. Any other board has no sensor at all, so the figure is modelled
+  from what that board draws idle and busy, scaled by the CPU load, and shown
+  with a "≈" (hover it for the details). `POWER_IDLE_W` and `POWER_MAX_W`
+  calibrate it against a wattmeter; `POWER_ESTIMATE=false` turns it off. The
+  kWh counters underneath are integrated by the history loop, so they keep
+  adding up with nobody watching, and survive a restart. Set `ENERGY_PRICE` to
+  what your utility charges to see what the Pi actually costs you.
 - **Throttling** — a red banner appears on every tab while the firmware reports
   under-voltage or throttling, and an amber one when it reported either since
   boot. On a Pi, that banner usually means the power supply, not the workload.
@@ -149,6 +166,8 @@ The refresh rate is shown in the dashboard header and can be changed live
   the point of it — but it samples every 10 s by default, reuses the snapshots
   the live loop already collected when a viewer is watching, and writes ~5 MB of
   SQLite per week. `HISTORY=false` turns it off entirely.
+- **Energy** rides along with that loop: one multiplication per sample and one
+  row per day, so the counters cost nothing beyond the history itself.
 
 ## Releasing (maintainers)
 
@@ -164,6 +183,8 @@ The refresh rate is shown in the dashboard header and can be changed live
 - **v2** ✅ history + charts, top processes, per-container Docker stats
 - **v2.1** ✅ throttling/under-voltage, power draw, extra probes, every
   filesystem and interface, light theme, PWA, kiosk mode
+- **v2.2** ✅ power on every board (measured or modelled), energy counters and
+  cost, power history
 - **next**: threshold alerts (mail/webhook). See [docs/SPECS.md](docs/SPECS.md).
 
 ## License

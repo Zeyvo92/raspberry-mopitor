@@ -3,6 +3,7 @@ import path from "node:path";
 import type { DatabaseSync, StatementSync } from "node:sqlite";
 import { HISTORY_MAX_POINTS } from "../config.js";
 import type { HistoryPoint, HistorySeries, MetricsSnapshot } from "../types.js";
+import type { EnergyStore } from "./energy.js";
 
 const PRUNE_INTERVAL_MS = 60 * 60 * 1000;
 
@@ -14,12 +15,12 @@ export interface HistoryStoreOptions {
   retentionHours: number;
 }
 
-export interface HistoryStore {
+export interface HistoryStore extends EnergyStore {
   /** appends one row; failures are swallowed (a full SD card must not kill the monitor) */
   record(snapshot: MetricsSnapshot): void;
   /** bucket-averaged series covering the last `rangeMs`, gaps included as null points */
   query(rangeMs: number): HistorySeries;
-  /** deletes rows older than the retention window */
+  /** deletes sample rows older than the retention window (energy days stay) */
   prune(now?: number): void;
   close(): void;
 }
@@ -49,15 +50,50 @@ const SCHEMA = `
     disk_total INTEGER NOT NULL,
     net_rx     REAL    NOT NULL,
     net_tx     REAL    NOT NULL,
-    fan_rpm    INTEGER
+    fan_rpm    INTEGER,
+    power      REAL
+  );
+
+  CREATE TABLE IF NOT EXISTS energy (
+    day     TEXT PRIMARY KEY,
+    wh      REAL NOT NULL,
+    seconds REAL NOT NULL
   );
 `;
+
+/**
+ * Columns added after the first release. `CREATE TABLE IF NOT EXISTS` leaves an
+ * existing database alone, so each one is added by hand — nobody should lose a
+ * week of history to an upgrade.
+ */
+const MIGRATIONS: { table: string; column: string; ddl: string }[] = [
+  {
+    table: "samples",
+    column: "power",
+    ddl: "ALTER TABLE samples ADD COLUMN power REAL",
+  },
+];
+
+function migrate(db: DatabaseSync): void {
+  for (const { table, column, ddl } of MIGRATIONS) {
+    const columns = db
+      .prepare(`PRAGMA table_info(${table})`)
+      .all()
+      .map((row) => row["name"]);
+    if (!columns.includes(column)) db.exec(ddl);
+  }
+}
 
 const INSERT = `
   INSERT OR REPLACE INTO samples
     (ts, cpu, cpu_temp, mem_used, mem_total, swap_used,
-     disk_used, disk_total, net_rx, net_tx, fan_rpm)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+     disk_used, disk_total, net_rx, net_tx, fan_rpm, power)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+`;
+
+const UPSERT_ENERGY = `
+  INSERT INTO energy (day, wh, seconds) VALUES (?, ?, ?)
+  ON CONFLICT(day) DO UPDATE SET wh = excluded.wh, seconds = excluded.seconds;
 `;
 
 // Integer division groups rows into fixed-width buckets aligned on the epoch,
@@ -75,7 +111,8 @@ const SELECT = `
          MAX(disk_total) AS disk_total,
          AVG(net_rx)    AS net_rx,
          AVG(net_tx)    AS net_tx,
-         AVG(fan_rpm)   AS fan_rpm
+         AVG(fan_rpm)   AS fan_rpm,
+         AVG(power)     AS power
   FROM samples
   WHERE ts >= ?
   GROUP BY bucket_ts
@@ -127,6 +164,7 @@ export async function openHistoryStore(
     db.exec("PRAGMA journal_mode = WAL;");
     db.exec("PRAGMA synchronous = NORMAL;");
     db.exec(SCHEMA);
+    migrate(db);
   } catch (err) {
     console.warn(`history: cannot open ${options.file} — disabled (${String(err)})`);
     return null;
@@ -134,6 +172,10 @@ export async function openHistoryStore(
 
   const insert: StatementSync = db.prepare(INSERT);
   const select: StatementSync = db.prepare(SELECT);
+  const upsertEnergy: StatementSync = db.prepare(UPSERT_ENERGY);
+  const selectEnergy: StatementSync = db.prepare(
+    "SELECT day, wh, seconds FROM energy ORDER BY day;",
+  );
   const deleteOld: StatementSync = db.prepare("DELETE FROM samples WHERE ts < ?;");
   const retentionMs = options.retentionHours * 60 * 60 * 1000;
   let writeFailed = false;
@@ -153,6 +195,7 @@ export async function openHistoryStore(
           snapshot.network.rxSec,
           snapshot.network.txSec,
           snapshot.fan.rpm,
+          snapshot.power?.watts ?? null,
         );
         writeFailed = false;
       } catch (err) {
@@ -183,6 +226,7 @@ export async function openHistoryStore(
             netRx: round(num(row["net_rx"]), 0),
             netTx: round(num(row["net_tx"]), 0),
             fanRpm: round(num(row["fan_rpm"]), 0),
+            power: round(num(row["power"]), 2),
           });
         }
       } catch (err) {
@@ -197,6 +241,31 @@ export async function openHistoryStore(
       }
 
       return { rangeMs, bucketMs, from, points };
+    },
+
+    saveEnergyDay(day, wh, seconds) {
+      try {
+        // rounded on the way in: a hundredth of a Wh is far below what any of
+        // this measures, and it keeps the stored numbers readable
+        upsertEnergy.run(day, Math.round(wh * 100) / 100, Math.round(seconds));
+      } catch (err) {
+        if (!writeFailed) console.warn("history: energy write failed —", String(err));
+        writeFailed = true;
+      }
+    },
+
+    loadEnergyDays() {
+      try {
+        // both columns are NOT NULL REALs, so they always come back numeric
+        return selectEnergy.all().map((row) => ({
+          day: String(row["day"]),
+          wh: Number(row["wh"]),
+          seconds: Number(row["seconds"]),
+        }));
+      } catch (err) {
+        console.warn("history: energy read failed —", String(err));
+        return [];
+      }
     },
 
     prune(now = Date.now()) {
@@ -235,5 +304,6 @@ function emptyPoint(ts: number): HistoryPoint {
     netRx: null,
     netTx: null,
     fanRpm: null,
+    power: null,
   };
 }

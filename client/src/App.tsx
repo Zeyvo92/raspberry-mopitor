@@ -113,8 +113,15 @@ export default function App() {
               <TemperatureCard temperature={metrics.temperature} />
               {/* only hardware with a tachometer reports a speed */}
               {metrics.fan.rpm !== null && <FanCard fan={metrics.fan} />}
-              {/* only the Pi 5 PMIC measures what the board draws */}
-              {metrics.power && <PowerCard power={metrics.power} />}
+              {/* a measured draw, a modelled one, or the kWh they added up
+                  to — a machine that has none of the three gets no card */}
+              {(metrics.power || metrics.energy) && (
+                <PowerCard
+                  power={metrics.power}
+                  energy={metrics.energy}
+                  model={staticInfo?.model}
+                />
+              )}
               <DiskCard disk={metrics.disk} />
               {/* one filesystem is already the headline card's subject */}
               {metrics.disk.filesystems.length > 1 && (

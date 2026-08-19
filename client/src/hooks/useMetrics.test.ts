@@ -237,6 +237,7 @@ describe("useMetrics history", () => {
     netRx: null,
     netTx: null,
     fanRpm: null,
+    power: null,
   });
 
   const snapshot = (ts: number, load: number) => ({

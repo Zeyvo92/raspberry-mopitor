@@ -7,6 +7,7 @@ import {
   MIN_HISTORY_RANGE_MS,
   MIN_INTERVAL_MS,
 } from "../config.js";
+import type { EnergyMeter } from "../history/energy.js";
 import type { HistoryRecorder } from "../history/recorder.js";
 import type { HistoryStore } from "../history/store.js";
 import {
@@ -33,6 +34,8 @@ export interface HubOptions {
   /** null when history is disabled or the database could not be opened */
   history?: HistoryStore | null;
   recorder?: HistoryRecorder | null;
+  /** energy counters to attach to every snapshot; null when not tracked */
+  energy?: EnergyMeter | null;
 }
 
 /**
@@ -54,6 +57,7 @@ export class Hub {
   private intervalMs = config.refreshIntervalMs;
   private readonly history: HistoryStore | null;
   private readonly recorder: HistoryRecorder | null;
+  private readonly energy: EnergyMeter | null;
 
   private readonly metricsLoop: PollLoop<MetricsSnapshot>;
   private readonly processLoop: PollLoop<ProcessList>;
@@ -62,14 +66,17 @@ export class Hub {
   private lastProcesses: ProcessList | null = null;
   private lastContainers: ContainerList | null = null;
 
-  constructor({ history = null, recorder = null }: HubOptions = {}) {
+  constructor({ history = null, recorder = null, energy = null }: HubOptions = {}) {
     this.history = history;
     this.recorder = recorder;
+    this.energy = energy;
 
     this.metricsLoop = new PollLoop({
       intervalMs: this.intervalMs,
       label: "metrics",
-      collect: collectSnapshot,
+      // the counters ride along with the live snapshot: they change slowly,
+      // but they cost one in-memory sum, not a query
+      collect: () => collectSnapshot(this.energy?.report() ?? null),
       shouldRun: () => this.clients.size > 0,
       emit: (data) => {
         this.recorder?.offer(data);

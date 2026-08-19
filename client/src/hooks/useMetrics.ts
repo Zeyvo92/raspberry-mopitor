@@ -200,6 +200,7 @@ function extend(
     netRx: Math.round(snapshot.network.rxSec),
     netTx: Math.round(snapshot.network.txSec),
     fanRpm: snapshot.fan.rpm,
+    power: snapshot.power?.watts ?? null,
   };
 
   const cutoff = ts - series.rangeMs;

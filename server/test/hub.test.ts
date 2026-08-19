@@ -408,3 +408,27 @@ describe("Hub history", () => {
     ws.disconnect();
   });
 });
+
+describe("Hub energy counters", () => {
+  it("attaches the counters to every snapshot it collects", async () => {
+    const report = { todayKwh: 0.12, totalKwh: 3.4 };
+    const energy = { report: vi.fn().mockReturnValue(report) };
+    const hub = new Hub({ energy: energy as never });
+    const ws = new FakeSocket();
+    await hub.add(asWs(ws));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(metrics.collectSnapshot).toHaveBeenCalledWith(report);
+    ws.disconnect();
+  });
+
+  it("collects with no counters when consumption isn't tracked", async () => {
+    const hub = new Hub();
+    const ws = new FakeSocket();
+    await hub.add(asWs(ws));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(metrics.collectSnapshot).toHaveBeenCalledWith(null);
+    ws.disconnect();
+  });
+});
