@@ -12,9 +12,13 @@ vi.mock("systeminformation", () => ({ default: si }));
 
 import {
   collectStaticInfo,
+  parseLifeTime,
+  readCpuFreqPolicy,
   readHardwareModel,
   readHostOsRelease,
+  readStorageHealth,
 } from "../src/metrics/system.js";
+import { cleanupFixtures, fixtureDir } from "./fixtures.js";
 
 let fixtureRoot: string;
 
@@ -32,6 +36,7 @@ beforeEach(() => {
 
 afterAll(async () => {
   await rm(fixtureRoot, { recursive: true, force: true });
+  await cleanupFixtures();
 });
 
 async function piFixtures() {
@@ -45,7 +50,17 @@ async function piFixtures() {
     path.join(hostRoot, "etc", "os-release"),
     'PRETTY_NAME="Raspberry Pi OS Lite (bookworm)"\nNAME="Raspberry Pi OS"\nID=raspbian\n',
   );
-  return { devicetreePath, hostRoot };
+  // sysfs bits are pointed at fixtures too: a test box must never make the
+  // expectations depend on its own hardware
+  const cpufreqRoot = await fixtureDir({
+    cpu0: {
+      cpufreq: { scaling_governor: "ondemand\n", cpuinfo_max_freq: "2400000\n" },
+    },
+  });
+  const blockRoot = await fixtureDir({
+    mmcblk0: { device: { name: "SC32G\n", life_time: "0x02 0x01\n" } },
+  });
+  return { devicetreePath, hostRoot, cpufreqRoot, blockRoot };
 }
 
 describe("readHardwareModel", () => {
@@ -104,6 +119,13 @@ describe("collectStaticInfo", () => {
     expect(info.hostname).toBe(os.hostname());
     expect(info.app).toHaveProperty("version");
     expect(info.features).toEqual(FEATURES);
+    expect(info.governor).toBe("ondemand");
+    expect(info.cpuMaxGhz).toBe(2.4);
+    expect(info.storage).toEqual({
+      device: "mmcblk0",
+      name: "SC32G",
+      lifeUsedPercent: 20,
+    });
   });
 
   it("falls back to systeminformation when Pi sources are absent", async () => {
@@ -111,9 +133,13 @@ describe("collectStaticInfo", () => {
     const info = await collectStaticInfo(FEATURES, {
       devicetreePath: "/nonexistent",
       hostRoot: "/nonexistent",
+      cpufreqRoot: "/nonexistent",
+      blockRoot: "/nonexistent",
     });
     expect(info.model).toBe("LENOVO ThinkPad");
     expect(info.os).toBe("Alpine Linux 3.21");
+    expect(info.governor).toBeNull();
+    expect(info.storage).toBeNull();
   });
 
   it("degrades to Unknown when nothing identifies the machine", async () => {
@@ -122,8 +148,76 @@ describe("collectStaticInfo", () => {
     const info = await collectStaticInfo(FEATURES, {
       devicetreePath: "/nonexistent",
       hostRoot: "/nonexistent",
+      cpufreqRoot: "/nonexistent",
+      blockRoot: "/nonexistent",
     });
     expect(info.model).toBe("Unknown");
     expect(info.cpuModel).toBe("Unknown");
+  });
+});
+
+describe("readCpuFreqPolicy", () => {
+  it("reads the governor and turns the ceiling into GHz", async () => {
+    const root = await fixtureDir({
+      cpu0: {
+        cpufreq: { scaling_governor: "performance\n", cpuinfo_max_freq: "1800000\n" },
+      },
+    });
+    expect(await readCpuFreqPolicy(root)).toEqual({
+      governor: "performance",
+      cpuMaxGhz: 1.8,
+    });
+  });
+
+  it("returns nulls on a kernel without cpufreq", async () => {
+    expect(await readCpuFreqPolicy("/nonexistent")).toEqual({
+      governor: null,
+      cpuMaxGhz: null,
+    });
+    const zero = await fixtureDir({ cpu0: { cpufreq: { cpuinfo_max_freq: "0\n" } } });
+    expect((await readCpuFreqPolicy(zero)).cpuMaxGhz).toBeNull();
+  });
+});
+
+describe("parseLifeTime", () => {
+  it("turns the worst band into a percentage of rated life", () => {
+    expect(parseLifeTime("0x01 0x01")).toBe(10);
+    expect(parseLifeTime("0x02 0x05")).toBe(50);
+    expect(parseLifeTime("0x0b 0x0b")).toBe(100); // beyond the estimate
+  });
+
+  it("returns null when the controller reports nothing usable", () => {
+    expect(parseLifeTime(null)).toBeNull();
+    expect(parseLifeTime("0x00 0x00")).toBeNull();
+    expect(parseLifeTime("unknown")).toBeNull();
+  });
+});
+
+describe("readStorageHealth", () => {
+  it("prefers the SD card over other block devices", async () => {
+    const root = await fixtureDir({
+      "sda": { device: { model: "Portable SSD\n" } },
+      "mmcblk0": { device: { name: "SC32G\n", life_time: "0x03 0x01\n" } },
+      "loop0": {},
+    });
+    expect(await readStorageHealth(root)).toEqual({
+      device: "mmcblk0",
+      name: "SC32G",
+      lifeUsedPercent: 30,
+    });
+  });
+
+  it("falls back to the drive model, without a life estimate", async () => {
+    const root = await fixtureDir({ nvme0n1: { device: { model: "WD SN570\n" } } });
+    expect(await readStorageHealth(root)).toEqual({
+      device: "nvme0n1",
+      name: "WD SN570",
+      lifeUsedPercent: null,
+    });
+  });
+
+  it("returns null when nothing looks like a boot device", async () => {
+    expect(await readStorageHealth("/nonexistent")).toBeNull();
+    expect(await readStorageHealth(await fixtureDir({ loop0: {} }))).toBeNull();
   });
 });

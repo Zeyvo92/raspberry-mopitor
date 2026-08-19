@@ -41,8 +41,18 @@ export const config = {
    * used to read the host's /etc/os-release. Missing path = fall back to
    * the local one (bare-metal installs). */
   hostRoot: process.env.HOST_ROOT ?? "/host",
-  /** kernel hwmon root, where fan tachometers live; overridable for tests */
+  /** kernel hwmon root, where fan tachometers, extra probes and the power
+   * rails live; overridable for tests */
   hwmonRoot: process.env.HWMON_ROOT ?? "/sys/class/hwmon",
+  /** firmware throttle register; empty = look in the usual places, including
+   * under the host mount (see metrics/throttle.ts) */
+  throttlePath: process.env.THROTTLE_PATH ?? "",
+  /** cpufreq root, where the governor and the maximum clock are published */
+  cpufreqRoot: process.env.CPUFREQ_ROOT ?? "/sys/devices/system/cpu",
+  /** sysfs block devices, where SD/eMMC wear is published */
+  blockRoot: process.env.BLOCK_ROOT ?? "/sys/block",
+  /** wireless link quality, in the host network namespace (network_mode: host) */
+  wirelessPath: process.env.PROC_NET_WIRELESS ?? "/proc/net/wireless",
   /** where the built SPA lives */
   staticDir: process.env.STATIC_DIR ?? path.resolve(here, "../../client/dist"),
   /** set UPDATE_CHECK=false to disable the GitHub release check entirely */

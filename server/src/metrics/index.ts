@@ -5,14 +5,16 @@ import { collectDisk } from "./disk.js";
 import { collectFan } from "./fan.js";
 import { collectMemory } from "./memory.js";
 import { collectNetwork } from "./network.js";
+import { collectPower } from "./power.js";
 import { collectTemperature } from "./temperature.js";
+import { collectThrottle } from "./throttle.js";
 
 export { collectStaticInfo } from "./system.js";
 export { collectProcesses } from "./processes.js";
 export { collectContainers, isDockerAvailable } from "./docker.js";
 
 export async function collectSnapshot(): Promise<MetricsSnapshot> {
-  const [cpu, memory, temperature, fan, disk, network, time] =
+  const [cpu, memory, temperature, fan, disk, network, throttle, power, time] =
     await Promise.all([
       collectCpu(),
       collectMemory(),
@@ -20,6 +22,8 @@ export async function collectSnapshot(): Promise<MetricsSnapshot> {
       collectFan(),
       collectDisk(),
       collectNetwork(),
+      collectThrottle(),
+      collectPower(),
       si.time(),
     ]);
 
@@ -32,5 +36,7 @@ export async function collectSnapshot(): Promise<MetricsSnapshot> {
     fan,
     disk,
     network,
+    throttle,
+    power,
   };
 }

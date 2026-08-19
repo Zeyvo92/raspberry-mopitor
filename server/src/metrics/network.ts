@@ -1,19 +1,188 @@
 import si from "systeminformation";
-import type { NetworkMetrics } from "../types.js";
+import { config } from "../config.js";
+import type {
+  InterfaceMetrics,
+  NetworkMetrics,
+  WifiMetrics,
+} from "../types.js";
+import { readText } from "./sysfs.js";
 
-export async function collectNetwork(): Promise<NetworkMetrics> {
-  // networkStats() with no arg reports the default external interface.
-  // *_sec values need two samples to be meaningful; systeminformation
-  // handles the delta internally, the first tick just reads as 0.
-  const [stats] = await si.networkStats();
+/**
+ * Counters live in /proc/net/dev: one read gives every interface at once.
+ * systeminformation would do the same job by spawning a shell per interface
+ * on each tick — at a 100 ms refresh that is the most expensive thing the
+ * monitor could do to a Pi, so the parsing lives here instead. Hosts without
+ * procfs (a contributor on macOS) fall back to systeminformation, which still
+ * reports the default interface.
+ */
+const PROC_NET_DEV = "/proc/net/dev";
+const PROC_NET_ROUTE = "/proc/net/route";
 
-  if (!stats) {
-    return { iface: "unknown", rxSec: 0, txSec: 0 };
+/** loopback says nothing, and one veth per container would drown the list */
+const IGNORED = /^(lo|veth)/;
+
+interface Counters {
+  rxBytes: number;
+  txBytes: number;
+  /** epoch ms of the reading, so a skipped tick doesn't inflate the rate */
+  at: number;
+}
+
+interface Reading {
+  iface: string;
+  rxBytes: number;
+  txBytes: number;
+}
+
+export function parseProcNetDev(content: string): Reading[] {
+  const readings: Reading[] = [];
+  // two header lines, then "  iface: rx_bytes packets … tx_bytes packets …"
+  for (const line of content.split("\n").slice(2)) {
+    const [name, rest] = line.split(":");
+    if (rest === undefined) continue;
+    const iface = name!.trim();
+    if (!iface || IGNORED.test(iface)) continue;
+    const fields = rest.trim().split(/\s+/).map(Number);
+    const rxBytes = fields[0];
+    const txBytes = fields[8];
+    if (!Number.isFinite(rxBytes) || !Number.isFinite(txBytes)) continue;
+    // an interface that has never carried a byte is down, or a shaping
+    // device the kernel created (ifb0, dummy0) — neither is worth a row
+    if (rxBytes! + txBytes! === 0) continue;
+    readings.push({ iface, rxBytes: rxBytes!, txBytes: txBytes! });
   }
+  return readings;
+}
 
-  return {
-    iface: stats.iface,
-    rxSec: Math.max(stats.rx_sec ?? 0, 0),
-    txSec: Math.max(stats.tx_sec ?? 0, 0),
+/** the interface carrying the default route — destination 0.0.0.0 */
+export function parseDefaultIface(content: string): string | null {
+  for (const line of content.split("\n").slice(1)) {
+    const fields = line.trim().split(/\s+/);
+    if (fields.length > 1 && fields[1] === "00000000") return fields[0]!;
+  }
+  return null;
+}
+
+/**
+ * /proc/net/wireless holds the numbers `iwconfig` prints. Quality is a
+ * fraction of a driver-defined maximum — 70 on every mac80211 driver, which
+ * is what a Pi uses — and the level is dBm, unsigned on older drivers.
+ */
+const WIFI_QUALITY_MAX = 70;
+
+export function parseWireless(content: string): WifiMetrics | null {
+  for (const line of content.split("\n").slice(2)) {
+    const [name, rest] = line.split(":");
+    if (rest === undefined) continue;
+    const iface = name!.trim();
+    if (!iface) continue;
+    const fields = rest.trim().split(/\s+/);
+    const link = Number.parseFloat(fields[1] ?? "");
+    const level = Number.parseFloat(fields[2] ?? "");
+    return {
+      iface,
+      quality: Number.isFinite(link)
+        ? Math.min(Math.round((link / WIFI_QUALITY_MAX) * 100), 100)
+        : null,
+      // some drivers report the level as an unsigned byte
+      signalDbm: Number.isFinite(level) ? (level > 0 ? level - 256 : level) : null,
+    };
+  }
+  return null;
+}
+
+export function createNetworkReader(
+  paths: {
+    procNetDev?: string;
+    procNetRoute?: string;
+    wirelessPath?: string;
+  } = {},
+) {
+  const netDev = paths.procNetDev ?? PROC_NET_DEV;
+  const netRoute = paths.procNetRoute ?? PROC_NET_ROUTE;
+  const wireless = paths.wirelessPath ?? config.wirelessPath;
+  const previous = new Map<string, Counters>();
+
+  return async function collectNetwork(): Promise<NetworkMetrics> {
+    const raw = await readText(netDev);
+    if (raw === null) return fallback();
+
+    const now = Date.now();
+    const interfaces: InterfaceMetrics[] = [];
+    for (const reading of parseProcNetDev(raw)) {
+      const before = previous.get(reading.iface);
+      previous.set(reading.iface, {
+        rxBytes: reading.rxBytes,
+        txBytes: reading.txBytes,
+        at: now,
+      });
+      // no previous sample, or two readings inside the same millisecond:
+      // report 0 rather than dividing by zero
+      const seconds = before ? (now - before.at) / 1000 : 0;
+      interfaces.push({
+        iface: reading.iface,
+        rxSec: seconds > 0 ? rate(reading.rxBytes, before!.rxBytes, seconds) : 0,
+        txSec: seconds > 0 ? rate(reading.txBytes, before!.txBytes, seconds) : 0,
+        rxBytes: reading.rxBytes,
+        txBytes: reading.txBytes,
+      });
+    }
+
+    const [routes, wifiRaw] = await Promise.all([
+      readText(netRoute),
+      readText(wireless),
+    ]);
+    const primary = pickPrimary(interfaces, routes);
+
+    return {
+      iface: primary?.iface ?? "unknown",
+      rxSec: primary?.rxSec ?? 0,
+      txSec: primary?.txSec ?? 0,
+      interfaces,
+      wifi: wifiRaw === null ? null : parseWireless(wifiRaw),
+    };
   };
 }
+
+/** a counter that went backwards means it wrapped, or the link was reset */
+function rate(current: number, before: number, seconds: number): number {
+  return Math.max(Math.round((current - before) / seconds), 0);
+}
+
+function pickPrimary(
+  interfaces: InterfaceMetrics[],
+  routes: string | null,
+): InterfaceMetrics | undefined {
+  const defaultIface = routes === null ? null : parseDefaultIface(routes);
+  const byRoute = interfaces.find((entry) => entry.iface === defaultIface);
+  if (byRoute) return byRoute;
+  // no default route (Pi on an isolated network): headline the busiest link
+  return interfaces.reduce<InterfaceMetrics | undefined>(
+    (best, entry) => (!best || entry.rxBytes > best.rxBytes ? entry : best),
+    undefined,
+  );
+}
+
+/** procfs-less host (macOS dev machine): the default interface, no more */
+async function fallback(): Promise<NetworkMetrics> {
+  const [stats] = await si.networkStats();
+  if (!stats) {
+    return { iface: "unknown", rxSec: 0, txSec: 0, interfaces: [], wifi: null };
+  }
+  const entry: InterfaceMetrics = {
+    iface: stats.iface,
+    rxSec: Math.max(Math.round(stats.rx_sec ?? 0), 0),
+    txSec: Math.max(Math.round(stats.tx_sec ?? 0), 0),
+    rxBytes: stats.rx_bytes ?? 0,
+    txBytes: stats.tx_bytes ?? 0,
+  };
+  return {
+    iface: entry.iface,
+    rxSec: entry.rxSec,
+    txSec: entry.txSec,
+    interfaces: [entry],
+    wifi: null,
+  };
+}
+
+export const collectNetwork = createNetworkReader();

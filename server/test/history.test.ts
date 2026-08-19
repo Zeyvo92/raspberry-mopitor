@@ -21,10 +21,18 @@ function snapshot(ts: number, over: Partial<MetricsSnapshot> = {}): MetricsSnaps
       swapTotal: 0,
       swapUsed: 0,
     },
-    temperature: { cpu: 50 },
+    temperature: { cpu: 50, sensors: [] },
     fan: { rpm: 3000 },
-    disk: { mount: "/", total: 32_000_000_000, used: 8_000_000_000 },
-    network: { iface: "eth0", rxSec: 1000, txSec: 500 },
+    disk: {
+      mount: "/",
+      total: 32_000_000_000,
+      used: 8_000_000_000,
+      filesystems: [],
+      io: null,
+    },
+    network: { iface: "eth0", rxSec: 1000, txSec: 500, interfaces: [], wifi: null },
+    throttle: null,
+    power: null,
     ...over,
   };
 }
@@ -88,7 +96,7 @@ describe("history store", () => {
   });
 
   it("keeps missing sensors null instead of averaging them to zero", () => {
-    store.record(snapshot(Date.now(), { temperature: { cpu: null }, fan: { rpm: null } }));
+    store.record(snapshot(Date.now(), { temperature: { cpu: null, sensors: [] }, fan: { rpm: null } }));
 
     const point = store.query(60_000).points.find((p) => p.cpu !== null);
     expect(point?.cpuTemp).toBeNull();
