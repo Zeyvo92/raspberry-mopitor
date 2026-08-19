@@ -224,18 +224,28 @@ describe("NetworkCard", () => {
 });
 
 describe("PowerCard", () => {
+  const sensed = {
+    watts: 7.65,
+    source: "sensor" as const,
+    rails: [
+      { name: "EXT5V", watts: 6 },
+      { name: "3v3_sys", watts: 1.65 },
+    ],
+  };
+
+  const energy = {
+    todayKwh: 0.12,
+    weekKwh: 0.84,
+    monthKwh: 3.6,
+    totalKwh: 12.5,
+    since: "2026-08-01",
+    avgWatts: 5.1,
+    pricePerKwh: null,
+    currency: "€",
+  };
+
   it("shows the total draw and ranks the rails", () => {
-    render(
-      <PowerCard
-        power={{
-          watts: 7.65,
-          rails: [
-            { name: "EXT5V", watts: 6 },
-            { name: "3v3_sys", watts: 1.65 },
-          ],
-        }}
-      />,
-    );
+    render(<PowerCard power={sensed} energy={null} />);
 
     expect(screen.getByText("7.65 W")).toBeInTheDocument();
     expect(screen.getByText("across 2 rails")).toBeInTheDocument();
@@ -244,16 +254,70 @@ describe("PowerCard", () => {
   });
 
   it("survives a sensor that reports a total but no rail", () => {
-    render(<PowerCard power={{ watts: 0, rails: [] }} />);
+    render(<PowerCard power={{ watts: 0, source: "sensor", rails: [] }} energy={null} />);
     expect(screen.getByText("0.00 W")).toBeInTheDocument();
   });
 
   it("draws an empty bar for a rail sitting at zero", () => {
     const { container } = render(
-      <PowerCard power={{ watts: 0, rails: [{ name: "3v3_dac", watts: 0 }] }} />,
+      <PowerCard
+        power={{ watts: 0, source: "sensor", rails: [{ name: "3v3_dac", watts: 0 }] }}
+        energy={null}
+      />,
     );
     expect(container.querySelector<HTMLElement>(".bg-emerald-500\\/70")?.style.width).toBe(
       "0%",
     );
+  });
+
+  it("marks a modelled draw as an estimate, and names the board", () => {
+    render(
+      <PowerCard
+        power={{ watts: 4.6, source: "estimate", rails: [] }}
+        energy={null}
+        model="Raspberry Pi 4 Model B"
+      />,
+    );
+
+    const value = screen.getByText("≈ 4.6 W");
+    expect(value).toBeInTheDocument();
+    expect(value).toHaveAttribute("title", expect.stringContaining("Raspberry Pi 4"));
+    expect(screen.getByText(/estimated from the board/)).toBeInTheDocument();
+  });
+
+  it("falls back to the family name when the board is unknown", () => {
+    render(<PowerCard power={{ watts: 2.5, source: "estimate", rails: [] }} energy={null} />);
+    expect(screen.getByText("≈ 2.5 W")).toHaveAttribute(
+      "title",
+      expect.stringContaining("Raspberry Pi"),
+    );
+  });
+
+  it("adds up the consumption over each window", () => {
+    render(<PowerCard power={sensed} energy={energy} />);
+
+    // under a kWh the counters read in watt-hours, which is where a Pi lives
+    expect(screen.getByText("120 Wh")).toBeInTheDocument();
+    expect(screen.getByText("840 Wh")).toBeInTheDocument();
+    expect(screen.getByText("3.60 kWh")).toBeInTheDocument();
+    expect(screen.getByText("12.5 kWh")).toBeInTheDocument();
+    expect(screen.getByText("5.1 W on average")).toBeInTheDocument();
+    expect(screen.getByText("since 01/08")).toBeInTheDocument();
+  });
+
+  it("prices each window when the server knows the tariff", () => {
+    render(
+      <PowerCard power={null} energy={{ ...energy, pricePerKwh: 0.25, currency: "$" }} />,
+    );
+
+    expect(screen.getByText(/0\.03 \$/)).toBeInTheDocument(); // 0.12 kWh × 0.25
+    expect(screen.getByText(/3\.13 \$/)).toBeInTheDocument(); // 12.5 kWh × 0.25
+    // no live reading at all: the counters stand on their own
+    expect(screen.queryByText(/W$/)).not.toBeInTheDocument();
+  });
+
+  it("keeps big totals readable", () => {
+    render(<PowerCard power={null} energy={{ ...energy, totalKwh: 1234.5 }} />);
+    expect(screen.getByText("1235 kWh")).toBeInTheDocument();
   });
 });

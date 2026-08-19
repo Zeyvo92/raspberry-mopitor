@@ -209,7 +209,11 @@ describe("App tabs", () => {
       live({
         metrics: {
           ...SNAPSHOT,
-          power: { watts: 4.2, rails: [{ name: "EXT5V", watts: 4.2 }] },
+          power: {
+            watts: 4.2,
+            source: "sensor",
+            rails: [{ name: "EXT5V", watts: 4.2 }],
+          },
           throttle: {
             raw: 0,
             now: {

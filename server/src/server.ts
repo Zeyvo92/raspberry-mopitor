@@ -1,6 +1,7 @@
 /* v8 ignore file -- process bootstrap: everything it wires is tested via app.ts */
 import { createApp } from "./app.js";
 import { config } from "./config.js";
+import { EnergyMeter } from "./history/energy.js";
 import { HistoryRecorder } from "./history/recorder.js";
 import { openHistoryStore } from "./history/store.js";
 import { startUpdateChecker } from "./version.js";
@@ -14,10 +15,25 @@ const history = config.history
       retentionHours: config.historyRetentionHours,
     })
   : null;
-const recorder = history ? new HistoryRecorder(history, config.historyIntervalMs) : null;
+// Energy is integrated from the samples the recorder takes, and persisted in
+// the same database: without one there is nothing to accumulate into, and the
+// dashboard shows the live draw only.
+const energy = history
+  ? new EnergyMeter({
+      store: history,
+      pricePerKwh: config.energyPrice,
+      currency: config.energyCurrency,
+      // a gap wider than a few recording intervals means the Pi (or the
+      // container) was not running — don't bill it at the last known wattage
+      maxGapMs: config.historyIntervalMs * 3,
+    })
+  : null;
+const recorder = history
+  ? new HistoryRecorder(history, config.historyIntervalMs, energy)
+  : null;
 recorder?.start();
 
-const server = createApp({ history, recorder });
+const server = createApp({ history, recorder, energy });
 startUpdateChecker();
 
 server.listen(config.port, () => {

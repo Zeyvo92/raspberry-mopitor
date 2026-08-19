@@ -120,8 +120,40 @@ export interface PowerRail {
 export interface PowerMetrics {
   /** total draw in watts */
   watts: number;
-  /** per-rail breakdown, empty when the sensor only exposes a total */
+  /**
+   * "sensor" when the board measures itself (Pi 5 PMIC, an external meter),
+   * "estimate" when the figure is modelled from the board profile and the CPU
+   * load — the UI must say so rather than pass it off as a reading.
+   */
+  source: "sensor" | "estimate";
+  /** per-rail breakdown, empty for an estimate or a sensor giving only a total */
   rails: PowerRail[];
+}
+
+/**
+ * Energy accumulated from the power readings, in kWh. Integrated by the
+ * history recorder — the one loop that runs with nobody connected — and
+ * persisted per local day, so the counters survive a restart. Null when the
+ * board reports no power at all, or when history is disabled (nothing to
+ * accumulate into).
+ */
+export interface EnergyMetrics {
+  /** since local midnight */
+  todayKwh: number;
+  /** the last 7 local days, today included */
+  weekKwh: number;
+  /** the last 30 local days */
+  monthKwh: number;
+  /** every day the meter still holds */
+  totalKwh: number;
+  /** oldest day counted, "YYYY-MM-DD" */
+  since: string;
+  /** mean draw over the whole accumulated window, watts */
+  avgWatts: number;
+  /** price of a kWh, null when ENERGY_PRICE is unset — the UI hides costs */
+  pricePerKwh: number | null;
+  /** symbol to print next to a price */
+  currency: string;
 }
 
 export interface FilesystemMetrics {
@@ -193,8 +225,10 @@ export interface MetricsSnapshot {
   network: NetworkMetrics;
   /** null on hardware that doesn't expose the firmware throttle register */
   throttle: ThrottleMetrics | null;
-  /** null without a power sensor (only the Pi 5 PMIC has one) */
+  /** null when the board neither measures nor models its draw */
   power: PowerMetrics | null;
+  /** null until the history recorder has accumulated a reading */
+  energy: EnergyMetrics | null;
 }
 
 /**
@@ -214,6 +248,7 @@ export interface HistoryPoint {
   netRx: number | null;
   netTx: number | null;
   fanRpm: number | null;
+  power: number | null;
 }
 
 export interface HistorySeries {

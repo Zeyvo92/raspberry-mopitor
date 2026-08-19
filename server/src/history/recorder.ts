@@ -1,5 +1,6 @@
 import { collectSnapshot } from "../metrics/index.js";
 import type { MetricsSnapshot } from "../types.js";
+import type { EnergyMeter } from "./energy.js";
 import type { HistoryStore } from "./store.js";
 
 /**
@@ -10,6 +11,9 @@ import type { HistoryStore } from "./store.js";
  * matters (what happened last night?). To stay cheap it never collects
  * metrics of its own while viewers are watching: the hub hands it every
  * snapshot it broadcasts and the recorder reuses the freshest one.
+ *
+ * It is also where energy is accumulated, for the same reason: consumption
+ * counted only while a browser was open would mean nothing.
  */
 export class HistoryRecorder {
   private latest: MetricsSnapshot | null = null;
@@ -19,6 +23,8 @@ export class HistoryRecorder {
   constructor(
     private readonly store: HistoryStore,
     private readonly intervalMs: number,
+    /** null when consumption isn't being tracked (no power reading at all) */
+    private readonly energy: EnergyMeter | null = null,
   ) {}
 
   /** hand over a snapshot the hub already collected */
@@ -47,6 +53,7 @@ export class HistoryRecorder {
           ? this.latest
           : await collectSnapshot();
       this.store.record(fresh);
+      this.energy?.add(fresh.power?.watts ?? null, fresh.ts);
     } catch (err) {
       console.error("history: sampling failed:", err);
     } finally {

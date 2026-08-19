@@ -24,6 +24,14 @@ function intEnv(name: string, fallback: number, min: number): number {
   return Math.max(value, min);
 }
 
+/** positive decimals (watts, price per kWh); 0 and junk fall back to the default */
+function floatEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  const value = raw ? Number.parseFloat(raw) : NaN;
+  if (!Number.isFinite(value) || value < 0) return fallback;
+  return value;
+}
+
 /** every switch follows the same rule: only the literal "false" turns it off */
 function boolEnv(name: string, fallback: boolean): boolean {
   const raw = process.env[name]?.trim().toLowerCase();
@@ -61,6 +69,18 @@ export const config = {
   updateCheckRepo: process.env.UPDATE_CHECK_REPO ?? "Zeyvo92/raspberry-mopitor",
   /** GitHub API base; overridable for tests and GitHub Enterprise */
   updateCheckApiBase: process.env.UPDATE_CHECK_API ?? "https://api.github.com",
+
+  /** POWER_ESTIMATE=false hides the modelled draw on boards with no sensor,
+   * leaving the power card to the Pi 5 and its PMIC */
+  powerEstimate: boolEnv("POWER_ESTIMATE", true),
+  /** draw of the board doing nothing, watts — 0 means "use the board profile" */
+  powerIdleWatts: floatEnv("POWER_IDLE_W", 0),
+  /** draw of the board with every core busy, watts — same convention */
+  powerMaxWatts: floatEnv("POWER_MAX_W", 0),
+  /** what a kWh costs, in ENERGY_CURRENCY — 0 hides every price */
+  energyPrice: floatEnv("ENERGY_PRICE", 0),
+  /** symbol shown next to a price; purely cosmetic, no conversion is done */
+  energyCurrency: process.env.ENERGY_CURRENCY ?? "€",
 
   /** HISTORY=false keeps the monitor strictly live: nothing is written to disk */
   history: boolEnv("HISTORY", true),

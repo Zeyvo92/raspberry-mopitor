@@ -22,6 +22,13 @@ services:
       # history: one sample every 10s, kept a week (~5 MB of SQLite)
       HISTORY_INTERVAL_MS: "10000"
       HISTORY_RETENTION_HOURS: "168"
+      # what a kWh costs you, to price the energy counters (0 = kWh only)
+      # ENERGY_PRICE: "0.2516"
+      # ENERGY_CURRENCY: "€"
+      # boards without a power sensor get a modelled draw; these two calibrate
+      # it against a wattmeter, POWER_ESTIMATE=false drops it altogether
+      # POWER_IDLE_W: "2.7"
+      # POWER_MAX_W: "6.4"
     volumes:
       - /:/host:ro
       # keeps the history database across container updates

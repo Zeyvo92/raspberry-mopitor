@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { EnergyMeter } from "../src/history/energy.js";
 import { HistoryRecorder } from "../src/history/recorder.js";
 import { bucketSize, openHistoryStore, type HistoryStore } from "../src/history/store.js";
 import type { MetricsSnapshot } from "../src/types.js";
@@ -33,9 +34,14 @@ function snapshot(ts: number, over: Partial<MetricsSnapshot> = {}): MetricsSnaps
     network: { iface: "eth0", rxSec: 1000, txSec: 500, interfaces: [], wifi: null },
     throttle: null,
     power: null,
+    energy: null,
     ...over,
   };
 }
+
+const drawing = (watts: number) => ({
+  power: { watts, source: "sensor" as const, rails: [] },
+});
 
 const cpuAt = (load: number) => ({
   cpu: { load, perCore: [], freqGhz: null, loadAvg: [0, 0, 0] as [number, number, number] },
@@ -127,6 +133,33 @@ describe("history store", () => {
     vi.useRealTimers();
   });
 
+  it("averages the power draw alongside the rest", () => {
+    const bucket = Math.floor(Date.now() / 10_000) * 10_000 - 10_000;
+    store.record(snapshot(bucket, drawing(4)));
+    store.record(snapshot(bucket + 1000, drawing(6)));
+    store.record(snapshot(bucket + 10_000)); // no sensor on this one
+
+    const filled = store.query(60_000).points.filter((p) => p.cpu !== null);
+    expect(filled.map((p) => p.power)).toEqual([5, null]);
+  });
+
+  it("keeps a running energy total per day", () => {
+    store.saveEnergyDay("2026-08-18", 41.666, 8640);
+    store.saveEnergyDay("2026-08-19", 12.5, 3600);
+    store.saveEnergyDay("2026-08-19", 25, 7200); // same day again: overwritten
+
+    expect(store.loadEnergyDays()).toEqual([
+      { day: "2026-08-18", wh: 41.67, seconds: 8640 },
+      { day: "2026-08-19", wh: 25, seconds: 7200 },
+    ]);
+  });
+
+  it("keeps the energy days a sample prune would sweep away", () => {
+    store.saveEnergyDay("2020-01-01", 1000, 86_400);
+    store.prune(Date.now());
+    expect(store.loadEnergyDays()).toHaveLength(1);
+  });
+
   it("closing twice is harmless", () => {
     const twice = store;
     twice.close();
@@ -191,12 +224,53 @@ describe("history store failure modes", () => {
 
     expect(store.query(60_000).points.every((p) => p.cpu === null)).toBe(true);
     expect(() => store.prune()).not.toThrow();
+    expect(() => store.saveEnergyDay("2026-08-19", 10, 3600)).not.toThrow();
+    expect(store.loadEnergyDays()).toEqual([]);
     expect(warn.mock.calls.map(([message]) => message)).toEqual([
       expect.stringContaining("write failed"),
       expect.stringContaining("query failed"),
       expect.stringContaining("prune failed"),
+      expect.stringContaining("energy read failed"),
     ]);
     warn.mockRestore();
+  });
+
+  it("complains once when the energy counters cannot be written", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const store = await memoryStore();
+    store.close();
+
+    store.saveEnergyDay("2026-08-19", 10, 3600);
+    store.saveEnergyDay("2026-08-19", 20, 7200);
+    expect(warn.mock.calls).toEqual([
+      [expect.stringContaining("energy write failed"), expect.any(String)],
+    ]);
+    warn.mockRestore();
+  });
+
+  it("adds the columns a database from an older version is missing", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "mopitor-migrate-"));
+    const file = path.join(dir, "history.db");
+    const { DatabaseSync } = await import("node:sqlite");
+
+    // the v0.5 schema, before consumption was recorded
+    const legacy = new DatabaseSync(file);
+    legacy.exec(`CREATE TABLE samples (
+      ts INTEGER PRIMARY KEY, cpu REAL NOT NULL, cpu_temp REAL,
+      mem_used INTEGER NOT NULL, mem_total INTEGER NOT NULL,
+      swap_used INTEGER NOT NULL, disk_used INTEGER NOT NULL,
+      disk_total INTEGER NOT NULL, net_rx REAL NOT NULL, net_tx REAL NOT NULL,
+      fan_rpm INTEGER);`);
+    legacy.exec("INSERT INTO samples VALUES (1, 10, NULL, 1, 2, 0, 1, 2, 0, 0, NULL);");
+    legacy.close();
+
+    const store = await openHistoryStore({ file, intervalMs: 10_000, retentionHours: 1 });
+    expect(store).not.toBeNull();
+    store!.record(snapshot(Date.now(), drawing(3.5)));
+    const point = store!.query(60_000).points.find((p) => p.cpu !== null);
+    expect(point?.power).toBe(3.5); // the old rows simply have none
+    store!.close();
+    await rm(dir, { recursive: true, force: true });
   });
 });
 
@@ -280,6 +354,25 @@ describe("HistoryRecorder", () => {
     recorder.stop();
     store.close();
     error.mockRestore();
+  });
+
+  it("accumulates energy from the samples it records", async () => {
+    const store = await memoryStore();
+    const meter = new EnergyMeter({ store, maxGapMs: 30_000 });
+    const recorder = new HistoryRecorder(store, 10_000, meter);
+    const start = Date.now();
+    // the board reports nothing on the first tick: that interval is not energy
+    collect.mockResolvedValueOnce(snapshot(Date.now()));
+    collect.mockImplementation(() => Promise.resolve(snapshot(Date.now(), drawing(360))));
+
+    recorder.start();
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    // 360 W over the 20 s between the first and the last tick = 2 Wh
+    expect(meter.report(start)?.todayKwh).toBe(0.002);
+    expect(store.loadEnergyDays()).toHaveLength(1);
+    recorder.stop();
+    store.close();
   });
 
   it("stopping before starting is harmless", () => {

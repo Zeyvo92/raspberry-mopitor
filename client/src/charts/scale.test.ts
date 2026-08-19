@@ -14,6 +14,7 @@ const point = (over: Partial<HistoryPoint>): HistoryPoint => ({
   netRx: null,
   netTx: null,
   fanRpm: null,
+  power: null,
   ...over,
 });
 

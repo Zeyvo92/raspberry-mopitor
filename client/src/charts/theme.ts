@@ -9,6 +9,10 @@ import type { ResolvedTheme } from "../theme";
  * the same green). One palette therefore serves both skins, and a reader who
  * switches theme keeps the colour associations they had built.
  *
+ * The power amber sits in the same band (OKLCH L 0.66) and only ever appears
+ * alone on its own chart, where it cannot be mistaken for the temperature
+ * orange.
+ *
  * The only chart carrying two series at once is the network one, and that
  * pair is the one that has to survive colour-vision deficiency: download and
  * upload separate by ΔE 12.7 (deutan, OKLab x100) and 30.3 with normal
@@ -21,6 +25,7 @@ export const CHART_COLORS = {
   memory: "#8b5cf6",
   netDown: "#0c9ad9",
   netUp: "#ec4899",
+  power: "#ca8a04",
 } as const;
 
 /** Chart chrome: recessive by design — the data is the only thing with weight. */

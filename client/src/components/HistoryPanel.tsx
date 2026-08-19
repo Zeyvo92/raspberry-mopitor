@@ -11,6 +11,8 @@ const percentTick = (value: number) =>
   `${value >= 10 || value === 0 ? Math.round(value) : value.toFixed(1)}%`;
 const celsiusTick = (value: number) => `${Math.round(value)}°C`;
 const rateTick = (value: number) => `${formatBytesShort(value)}/s`;
+const wattTick = (value: number) =>
+  `${value >= 10 || value === 0 ? Math.round(value) : value.toFixed(1)} W`;
 
 export function HistoryPanel({
   series,
@@ -47,6 +49,9 @@ export function HistoryPanel({
   const memTotal = [...points].reverse().find((p) => p.memTotal !== null)?.memTotal;
   const memoryScale = scaleFromZero(memTotal ?? peak(points, "memUsed"), { binary: true });
   const networkScale = scaleFromZero(peak(points, "netRx", "netTx"), { binary: true });
+  // a board with no sensor and no estimate never recorded a watt: no chart
+  const hasPower = points.some((point) => point.power !== null);
+  const powerScale = scaleFromZero(peak(points, "power"));
   const temperatures = extent(points, "cpuTemp");
   const temperatureScale = temperatures
     ? scaleAround(temperatures[0], temperatures[1], { pad: 2 })
@@ -149,6 +154,23 @@ export function HistoryPanel({
           loading={loading}
           emptyLabel={empty}
         />
+        {hasPower && (
+          <HistoryChart
+            title={t("history.power")}
+            points={points}
+            series={[
+              { key: "power", label: t("history.power"), color: CHART_COLORS.power },
+            ]}
+            rangeMs={rangeMs}
+            from={from}
+            to={to}
+            domain={powerScale.domain}
+            ticks={powerScale.ticks}
+            formatValue={wattTick}
+            loading={loading}
+            emptyLabel={empty}
+          />
+        )}
       </div>
     </div>
   );

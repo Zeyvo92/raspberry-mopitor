@@ -22,6 +22,44 @@ describe("config defaults", () => {
     expect(config.updateCheck).toBe(true);
     expect(config.updateCheckRepo).toBe("Zeyvo92/raspberry-mopitor");
     expect(config.updateCheckApiBase).toBe("https://api.github.com");
+    expect(config.powerEstimate).toBe(true);
+    expect(config.powerIdleWatts).toBe(0);
+    expect(config.powerMaxWatts).toBe(0);
+    expect(config.energyPrice).toBe(0);
+    expect(config.energyCurrency).toBe("€");
+  });
+});
+
+describe("power and energy env vars", () => {
+  it("reads decimal watts and prices", async () => {
+    const { config } = await loadConfig({
+      POWER_IDLE_W: "2.9",
+      POWER_MAX_W: "7",
+      ENERGY_PRICE: "0.2516",
+      ENERGY_CURRENCY: "$",
+    });
+    expect(config.powerIdleWatts).toBe(2.9);
+    expect(config.powerMaxWatts).toBe(7);
+    expect(config.energyPrice).toBe(0.2516);
+    expect(config.energyCurrency).toBe("$");
+  });
+
+  it("ignores junk and negative values", async () => {
+    const { config } = await loadConfig({
+      POWER_IDLE_W: "free",
+      POWER_MAX_W: "-3",
+      ENERGY_PRICE: "",
+    });
+    expect(config.powerIdleWatts).toBe(0);
+    expect(config.powerMaxWatts).toBe(0);
+    expect(config.energyPrice).toBe(0);
+  });
+
+  it("turns the estimate off only on the string false", async () => {
+    expect((await loadConfig({ POWER_ESTIMATE: "false" })).config.powerEstimate).toBe(
+      false,
+    );
+    expect((await loadConfig({ POWER_ESTIMATE: "1" })).config.powerEstimate).toBe(true);
   });
 });
 
