@@ -203,4 +203,93 @@ describe("App tabs", () => {
     rerender(<App />);
     expect(screen.getByRole("heading", { name: "CPU" })).toBeInTheDocument();
   });
+
+  it("adds the Pi-only cards when the hardware reports them", () => {
+    mockedUseMetrics.mockReturnValue(
+      live({
+        metrics: {
+          ...SNAPSHOT,
+          power: { watts: 4.2, rails: [{ name: "EXT5V", watts: 4.2 }] },
+          throttle: {
+            raw: 0,
+            now: {
+              underVoltage: false,
+              freqCapped: false,
+              throttled: false,
+              softTempLimit: false,
+            },
+            sinceBoot: {
+              underVoltage: false,
+              freqCapped: false,
+              throttled: false,
+              softTempLimit: false,
+            },
+          },
+          disk: {
+            ...SNAPSHOT.disk,
+            filesystems: [
+              { mount: "/", type: "ext4", total: 100, used: 50 },
+              { mount: "/boot/firmware", type: "vfat", total: 100, used: 10 },
+            ],
+          },
+        },
+      }),
+    );
+    renderWithI18n(<App />);
+
+    for (const title of ["Power", "Throttling", "Filesystems"]) {
+      expect(screen.getByRole("heading", { name: title })).toBeInTheDocument();
+    }
+  });
+
+  it("puts the cpufreq policy on the CPU card", () => {
+    mockedUseMetrics.mockReturnValue(live());
+    renderWithI18n(<App />);
+    expect(screen.getByText("governor ondemand · max 2.4 GHz")).toBeInTheDocument();
+  });
+
+  it("warns about throttling from any tab", async () => {
+    mockedUseMetrics.mockReturnValue(
+      live({
+        metrics: {
+          ...SNAPSHOT,
+          throttle: {
+            raw: 0x1,
+            now: {
+              underVoltage: true,
+              freqCapped: false,
+              throttled: false,
+              softTempLimit: false,
+            },
+            sinceBoot: {
+              underVoltage: true,
+              freqCapped: false,
+              throttled: false,
+              softTempLimit: false,
+            },
+          },
+        },
+      }),
+    );
+    renderWithI18n(<App />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Under-voltage");
+    await userEvent.click(screen.getByRole("tab", { name: "Processes" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Under-voltage");
+  });
+
+  it("drops the chrome in kiosk mode and brings it back", async () => {
+    mockedUseMetrics.mockReturnValue(live());
+    renderWithI18n(<App />);
+
+    await userEvent.click(screen.getByRole("tab", { name: "History" }));
+    await userEvent.click(screen.getByRole("button", { name: "Kiosk mode" }));
+
+    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+    // the dashboard is the only view a kiosk screen shows
+    expect(screen.getByRole("heading", { name: "CPU" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Leave kiosk mode" }));
+    expect(screen.getByRole("tablist")).toBeInTheDocument();
+  });
 });

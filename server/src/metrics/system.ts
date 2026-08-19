@@ -4,7 +4,8 @@ import { promises as fs } from "node:fs";
 import si from "systeminformation";
 import { config } from "../config.js";
 import { getAppInfo } from "../version.js";
-import type { Features, StaticInfo } from "../types.js";
+import type { Features, StaticInfo, StorageHealth } from "../types.js";
+import { listDir, readNumber, readText } from "./sysfs.js";
 
 // The device tree is exposed by the kernel and names the real board (e.g.
 // "Raspberry Pi 4 Model B Rev 1.4"). si.system() can't be trusted in Docker
@@ -44,19 +45,89 @@ export async function readHostOsRelease(
 }
 
 /**
+ * Governor and ceiling of the cpufreq policy. Two Pis with the same silicon
+ * behave differently under "powersave" and under "performance", and nothing
+ * else on the dashboard would explain the gap.
+ */
+export async function readCpuFreqPolicy(
+  cpufreqRoot: string = config.cpufreqRoot,
+): Promise<{ governor: string | null; cpuMaxGhz: number | null }> {
+  const dir = path.join(cpufreqRoot, "cpu0", "cpufreq");
+  const [governor, maxKhz] = await Promise.all([
+    readText(path.join(dir, "scaling_governor")),
+    readNumber(path.join(dir, "cpuinfo_max_freq")),
+  ]);
+  return {
+    governor,
+    cpuMaxGhz: maxKhz && maxKhz > 0 ? Math.round(maxKhz / 1e5) / 10 : null,
+  };
+}
+
+/** boot devices in the order we'd rather report them: the Pi's card first */
+const STORAGE_DEVICES = /^(mmcblk\d+|nvme\d+n\d+|sd[a-z])$/;
+
+/**
+ * eMMC and SD controllers report wear as two coarse bands ("0x02 0x01"),
+ * each step meaning another 10% of the rated write life is gone. It is the
+ * only warning a Pi ever gives before its card starts corrupting data.
+ */
+export function parseLifeTime(raw: string | null): number | null {
+  if (!raw) return null;
+  const bands = raw
+    .trim()
+    .split(/\s+/)
+    .map((value) => Number.parseInt(value, 16))
+    .filter((value) => Number.isInteger(value) && value > 0);
+  if (bands.length === 0) return null;
+  // 0x0b means "exceeded maximum estimated device life"
+  return Math.min(Math.max(...bands) * 10, 100);
+}
+
+export async function readStorageHealth(
+  blockRoot: string = config.blockRoot,
+): Promise<StorageHealth | null> {
+  const devices = (await listDir(blockRoot))
+    .filter((entry) => STORAGE_DEVICES.test(entry))
+    .sort();
+  // mmcblk sorts before nvme and sd, which is also the order we want
+  const device = devices[0];
+  if (device === undefined) return null;
+
+  const dir = path.join(blockRoot, device, "device");
+  const [name, model, lifeTime] = await Promise.all([
+    readText(path.join(dir, "name")),
+    readText(path.join(dir, "model")),
+    readText(path.join(dir, "life_time")),
+  ]);
+
+  return {
+    device,
+    name: name ?? model,
+    lifeUsedPercent: parseLifeTime(lifeTime),
+  };
+}
+
+/**
  * Sent on connect: hardware/OS info, the current version-check state and the
  * feature flags the hub resolved (history database, Docker socket…).
  */
 export async function collectStaticInfo(
   features: Features,
-  paths?: { devicetreePath?: string; hostRoot?: string },
+  paths?: {
+    devicetreePath?: string;
+    hostRoot?: string;
+    cpufreqRoot?: string;
+    blockRoot?: string;
+  },
 ): Promise<StaticInfo> {
-  const [system, osInfo, cpu, dtModel, hostOs] = await Promise.all([
+  const [system, osInfo, cpu, dtModel, hostOs, freq, storage] = await Promise.all([
     si.system(),
     si.osInfo(),
     si.cpu(),
     readHardwareModel(paths?.devicetreePath),
     readHostOsRelease(paths?.hostRoot),
+    readCpuFreqPolicy(paths?.cpufreqRoot),
+    readStorageHealth(paths?.blockRoot),
   ]);
 
   const model =
@@ -78,5 +149,8 @@ export async function collectStaticInfo(
       [cpu.manufacturer, cpu.brand].filter(Boolean).join(" ").trim() ||
       "Unknown",
     cores: cpu.cores,
+    governor: freq.governor,
+    cpuMaxGhz: freq.cpuMaxGhz,
+    storage,
   };
 }

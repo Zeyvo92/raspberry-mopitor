@@ -37,7 +37,7 @@ function FanBlades({ turnSeconds }: { turnSeconds: number | null }) {
           />
         )}
       </g>
-      <circle r="2.4" className="fill-zinc-400" />
+      <circle r="2.4" className="fill-ink-muted" />
     </svg>
   );
 }
@@ -58,17 +58,17 @@ export function FanCard({ fan }: { fan: FanMetrics }) {
       <Gauge
         value={share}
         label={stopped ? t("fan.stopped") : t("fan.running", { rpm })}
-        color={stopped ? "stroke-zinc-600" : "stroke-sky-400"}
+        color={stopped ? "stroke-ink-ghost" : "stroke-sky-400"}
       >
         <FanBlades turnSeconds={spinDurationSeconds(rpm, observedMax.current)} />
-        <div className="mt-1 font-mono text-lg font-bold text-zinc-100">
+        <div className="mt-1 font-mono text-lg font-bold text-ink">
           {rpm.toLocaleString()}
         </div>
-        <div className="text-[0.65rem] uppercase tracking-wider text-zinc-500">
+        <div className="text-[0.65rem] uppercase tracking-wider text-ink-faint">
           {t("fan.unit")}
         </div>
       </Gauge>
-      <p className="mt-2 text-center text-xs text-zinc-500">
+      <p className="mt-2 text-center text-xs text-ink-faint">
         {stopped
           ? t("fan.stoppedNote")
           : t("fan.share", {

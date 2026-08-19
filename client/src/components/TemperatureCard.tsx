@@ -15,10 +15,12 @@ export function TemperatureCard({
   const { t } = useI18n();
   const { cpu } = temperature;
 
+  const { sensors } = temperature;
+
   return (
     <Card title={t("temperature.title")}>
       {cpu === null ? (
-        <p className="text-sm text-zinc-500">{t("temperature.noSensor")}</p>
+        <p className="text-sm text-ink-faint">{t("temperature.noSensor")}</p>
       ) : (
         <>
           <BigValue
@@ -32,6 +34,23 @@ export function TemperatureCard({
             crit={(CRIT / SCALE_MAX) * 100}
           />
         </>
+      )}
+
+      {/* an NVMe or PMIC probe throttles the board just like the SoC does */}
+      {sensors.length > 0 && (
+        <div className="mt-3 border-t border-line pt-2">
+          <p className="mb-1 text-xs text-ink-faint">{t("temperature.sensors")}</p>
+          <ul className="space-y-0.5">
+            {sensors.map((sensor) => (
+              <li key={sensor.name} className="flex justify-between gap-2 text-xs">
+                <span className="truncate text-ink-faint">{sensor.name}</span>
+                <span className="shrink-0 font-mono text-ink-soft">
+                  {sensor.celsius.toFixed(1)}°C
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </Card>
   );

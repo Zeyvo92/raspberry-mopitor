@@ -1,5 +1,46 @@
 @import "tailwindcss";
 
+/*
+ * One palette, two skins. Tailwind v4 compiles every colour utility down to
+ * var(--color-…), so redefining the variables under [data-theme="light"]
+ * re-skins the whole interface without a single dark: variant in a component.
+ * The resolved theme is always written to <html data-theme>, including when
+ * the reader follows their system — the media query lives in one hook, not in
+ * the stylesheet.
+ */
+@theme {
+  --color-app: #09090b;
+  --color-surface: #121215;
+  --color-raised: #3f3f46;
+  --color-track: #27272a;
+  --color-line: #27272a;
+  --color-line-strong: #3f3f46;
+  --color-ink: #f4f4f5;
+  --color-ink-soft: #d4d4d8;
+  --color-ink-muted: #a1a1aa;
+  --color-ink-faint: #71717a;
+  --color-ink-ghost: #52525b;
+}
+
+[data-theme="light"] {
+  --color-app: #f4f4f5;
+  --color-surface: #ffffff;
+  --color-raised: #e4e4e7;
+  --color-track: #e4e4e7;
+  --color-line: #d4d4d8;
+  --color-line-strong: #a1a1aa;
+  --color-ink: #18181b;
+  --color-ink-soft: #27272a;
+  --color-ink-muted: #52525b;
+  --color-ink-faint: #71717a;
+  --color-ink-ghost: #a1a1aa;
+}
+
 body {
-  @apply bg-zinc-950 text-zinc-200 antialiased;
+  @apply bg-app text-ink-soft antialiased;
+}
+
+/* kiosk: a Pi driving a small screen has no pointer to hover with */
+[data-kiosk="true"] {
+  cursor: none;
 }

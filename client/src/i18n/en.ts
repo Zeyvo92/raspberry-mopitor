@@ -9,6 +9,11 @@ export const en = {
   "header.updateAvailable": "v{version} available",
   "header.updateHint": "You are running v{current} — v{latest} is available",
   "header.language": "Language",
+  "header.theme": "Theme",
+  "header.kiosk": "Kiosk mode",
+  "header.kioskExit": "Leave kiosk mode",
+  "header.storage": "{name} · {percent}% of write life used",
+  "header.storagePlain": "{name}",
 
   // tabs
   "tab.dashboard": "Dashboard",
@@ -25,6 +30,8 @@ export const en = {
   "cpu.title": "CPU",
   "cpu.loadAvg": "load avg {values}",
   "cpu.core": "c{index}",
+  "cpu.governor": "governor {name}",
+  "cpu.max": "max {ghz} GHz",
   "memory.title": "Memory",
   "memory.ram": "RAM",
   "memory.swap": "swap",
@@ -33,6 +40,7 @@ export const en = {
   "temperature.cpu": "CPU",
   "temperature.throttle": "⚠ approaching throttle limit",
   "temperature.noSensor": "No sensor available",
+  "temperature.sensors": "other probes",
   "fan.title": "Fan",
   "fan.unit": "rpm",
   "fan.stopped": "Fan stopped",
@@ -41,9 +49,31 @@ export const en = {
   "fan.share": "{percent}% of {max} rpm",
   "disk.title": "Disk ({mount})",
   "disk.sub": "of {total}",
+  "disk.read": "read",
+  "disk.write": "write",
+  "filesystems.title": "Filesystems",
   "network.title": "Network ({iface})",
   "network.download": "download",
   "network.upload": "upload",
+  "network.interfaces": "interfaces",
+  "network.wifi": "Wi-Fi ({iface})",
+  "network.signal": "{dbm} dBm",
+  "network.quality": "link {percent}%",
+  "power.title": "Power",
+  "power.rails": "across {count} rails",
+  "throttle.title": "Throttling",
+  "throttle.underVoltage": "Under-voltage",
+  "throttle.freqCapped": "Frequency capped",
+  "throttle.throttled": "Throttled",
+  "throttle.softTempLimit": "Soft temp limit",
+  "throttle.ok": "Nothing reported since boot",
+  "throttle.now": "now",
+  "throttle.sinceBoot": "since boot",
+  "throttle.clear": "clear",
+  "throttle.alertNow": "{conditions} — right now",
+  "throttle.alertSinceBoot": "{conditions} — happened since boot",
+  "throttle.advice":
+    "Under-voltage means the power supply is sagging: use the official adapter and a short, thick cable.",
 
   // history
   "history.range": "range",
@@ -76,6 +106,10 @@ export const en = {
   "processes.memory": "Memory",
   "processes.command": "Command",
   "processes.empty": "No process data yet.",
+  "processes.filter": "Filter processes",
+  "processes.filterPlaceholder": "name, user, command…",
+  "processes.noMatch": "No process matches this filter.",
+  "processes.trend": "recent CPU usage",
 
   // containers
   "containers.title": "Docker containers",
@@ -88,6 +122,11 @@ export const en = {
   "containers.network": "Network",
   "containers.uptime": "Up",
   "containers.empty": "No containers on this host.",
+
+  // theme
+  "theme.system": "System",
+  "theme.light": "Light",
+  "theme.dark": "Dark",
 } as const;
 
 export type TranslationKey = keyof typeof en;

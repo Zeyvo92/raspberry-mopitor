@@ -27,12 +27,12 @@ export function RefreshControl({
   }
 
   return (
-    <label className="flex items-center gap-2 text-xs text-zinc-500">
+    <label className="flex items-center gap-2 text-xs text-ink-faint">
       {t("header.refresh")}
       <select
         value={refreshIntervalMs}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="cursor-pointer rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 font-mono text-xs text-zinc-300 outline-none hover:border-zinc-700 focus:border-zinc-600"
+        className="cursor-pointer rounded-md border border-line bg-surface px-2 py-1 font-mono text-xs text-ink-soft outline-none hover:border-line-strong focus:border-line-strong"
         title={t("header.refreshHint")}
       >
         {options.map((ms) => (

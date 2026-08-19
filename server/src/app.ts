@@ -14,6 +14,7 @@ const MIME_TYPES: Record<string, string> = {
   ".ico": "image/x-icon",
   ".woff2": "font/woff2",
   ".json": "application/json; charset=utf-8",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
 };
 
 export async function serveStatic(

@@ -10,6 +10,11 @@ export const fr: Dictionary = {
   "header.updateAvailable": "v{version} disponible",
   "header.updateHint": "Vous utilisez la v{current} — la v{latest} est disponible",
   "header.language": "Langue",
+  "header.theme": "Thème",
+  "header.kiosk": "Mode kiosque",
+  "header.kioskExit": "Quitter le mode kiosque",
+  "header.storage": "{name} · {percent}% de la durée de vie en écriture consommée",
+  "header.storagePlain": "{name}",
 
   // tabs
   "tab.dashboard": "Tableau de bord",
@@ -26,6 +31,8 @@ export const fr: Dictionary = {
   "cpu.title": "Processeur",
   "cpu.loadAvg": "charge moy. {values}",
   "cpu.core": "c{index}",
+  "cpu.governor": "gouverneur {name}",
+  "cpu.max": "max {ghz} GHz",
   "memory.title": "Mémoire",
   "memory.ram": "RAM",
   "memory.swap": "swap",
@@ -34,6 +41,7 @@ export const fr: Dictionary = {
   "temperature.cpu": "CPU",
   "temperature.throttle": "⚠ proche du seuil de bridage",
   "temperature.noSensor": "Aucune sonde disponible",
+  "temperature.sensors": "autres sondes",
   "fan.title": "Ventilateur",
   "fan.unit": "tr/min",
   "fan.stopped": "Ventilateur à l'arrêt",
@@ -42,9 +50,31 @@ export const fr: Dictionary = {
   "fan.share": "{percent}% de {max} tr/min",
   "disk.title": "Disque ({mount})",
   "disk.sub": "sur {total}",
+  "disk.read": "lecture",
+  "disk.write": "écriture",
+  "filesystems.title": "Systèmes de fichiers",
   "network.title": "Réseau ({iface})",
   "network.download": "descendant",
   "network.upload": "montant",
+  "network.interfaces": "interfaces",
+  "network.wifi": "Wi-Fi ({iface})",
+  "network.signal": "{dbm} dBm",
+  "network.quality": "lien {percent}%",
+  "power.title": "Consommation",
+  "power.rails": "réparties sur {count} rails",
+  "throttle.title": "Bridage",
+  "throttle.underVoltage": "Sous-tension",
+  "throttle.freqCapped": "Fréquence plafonnée",
+  "throttle.throttled": "Bridage actif",
+  "throttle.softTempLimit": "Seuil thermique doux",
+  "throttle.ok": "Rien à signaler depuis le démarrage",
+  "throttle.now": "maintenant",
+  "throttle.sinceBoot": "depuis le démarrage",
+  "throttle.clear": "rien",
+  "throttle.alertNow": "{conditions} — en ce moment",
+  "throttle.alertSinceBoot": "{conditions} — survenu depuis le démarrage",
+  "throttle.advice":
+    "Une sous-tension signale une alimentation qui s'effondre : utilisez l'adaptateur officiel et un câble court et épais.",
 
   // history
   "history.range": "plage",
@@ -77,6 +107,10 @@ export const fr: Dictionary = {
   "processes.memory": "Mémoire",
   "processes.command": "Commande",
   "processes.empty": "Pas encore de données sur les processus.",
+  "processes.filter": "Filtrer les processus",
+  "processes.filterPlaceholder": "nom, utilisateur, commande…",
+  "processes.noMatch": "Aucun processus ne correspond à ce filtre.",
+  "processes.trend": "usage CPU récent",
 
   // containers
   "containers.title": "Conteneurs Docker",
@@ -89,4 +123,9 @@ export const fr: Dictionary = {
   "containers.network": "Réseau",
   "containers.uptime": "Actif",
   "containers.empty": "Aucun conteneur sur cet hôte.",
+
+  // theme
+  "theme.system": "Système",
+  "theme.light": "Clair",
+  "theme.dark": "Sombre",
 };

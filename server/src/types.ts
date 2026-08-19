@@ -20,6 +20,19 @@ export interface Features {
   containers: boolean;
 }
 
+/**
+ * Wear and identity of the boot device. eMMC/SD controllers expose a life
+ * estimate in 10% steps; most USB/NVMe drives don't, hence the nulls.
+ */
+export interface StorageHealth {
+  /** block device the root filesystem boots from, e.g. "mmcblk0" */
+  device: string;
+  /** name reported by the card controller, e.g. "SC32G" */
+  name: string | null;
+  /** rated life already used, percent — null when the device doesn't report it */
+  lifeUsedPercent: number | null;
+}
+
 export interface StaticInfo {
   app: AppVersionInfo;
   features: Features;
@@ -31,6 +44,12 @@ export interface StaticInfo {
   arch: string;
   cpuModel: string;
   cores: number;
+  /** cpufreq governor in force ("ondemand", "performance"…), read on connect */
+  governor: string | null;
+  /** maximum clock the governor may reach, GHz */
+  cpuMaxGhz: number | null;
+  /** boot device wear, null when it can't be read (non-Pi host, USB boot) */
+  storage: StorageHealth | null;
 }
 
 export interface CpuMetrics {
@@ -53,9 +72,17 @@ export interface MemoryMetrics {
   swapUsed: number;
 }
 
+export interface TemperatureSensor {
+  /** hwmon label or device name, e.g. "nvme", "rp1_adc" */
+  name: string;
+  celsius: number;
+}
+
 export interface TemperatureMetrics {
   /** °C, null when no sensor is available (e.g. dev machine) */
   cpu: number | null;
+  /** probes other than the SoC (NVMe, PMIC…) — empty on most boards */
+  sensors: TemperatureSensor[];
 }
 
 export interface FanMetrics {
@@ -64,18 +91,93 @@ export interface FanMetrics {
   rpm: number | null;
 }
 
-export interface DiskMetrics {
+/**
+ * The four conditions the Pi firmware reports, either happening right now or
+ * having happened since boot. Under-voltage is the one that matters most: it
+ * means the power supply sagged below 4.63 V and the board is at risk of
+ * corrupting its card, not just of running slower.
+ */
+export interface ThrottleFlags {
+  underVoltage: boolean;
+  freqCapped: boolean;
+  throttled: boolean;
+  softTempLimit: boolean;
+}
+
+export interface ThrottleMetrics {
+  /** raw firmware bitmask, kept for debugging */
+  raw: number;
+  now: ThrottleFlags;
+  sinceBoot: ThrottleFlags;
+}
+
+export interface PowerRail {
+  /** hwmon label, e.g. "EXT5V_V" */
+  name: string;
+  watts: number;
+}
+
+export interface PowerMetrics {
+  /** total draw in watts */
+  watts: number;
+  /** per-rail breakdown, empty when the sensor only exposes a total */
+  rails: PowerRail[];
+}
+
+export interface FilesystemMetrics {
   mount: string;
+  /** "ext4", "vfat"… */
+  type: string;
   /** bytes */
   total: number;
   used: number;
 }
 
-export interface NetworkMetrics {
+export interface DiskIoMetrics {
+  /** bytes per second across every block device */
+  readSec: number;
+  writeSec: number;
+}
+
+export interface DiskMetrics {
+  mount: string;
+  /** bytes */
+  total: number;
+  used: number;
+  /** every mounted real filesystem, the primary one included */
+  filesystems: FilesystemMetrics[];
+  /** whole-host block throughput, null when /proc/diskstats is unreadable */
+  io: DiskIoMetrics | null;
+}
+
+export interface InterfaceMetrics {
   iface: string;
   /** bytes per second */
   rxSec: number;
   txSec: number;
+  /** cumulative counters since boot, bytes */
+  rxBytes: number;
+  txBytes: number;
+}
+
+export interface WifiMetrics {
+  iface: string;
+  /** link quality, percent — null when the driver doesn't report it */
+  quality: number | null;
+  /** signal level in dBm: -50 excellent, -70 workable, -80 and below poor */
+  signalDbm: number | null;
+}
+
+export interface NetworkMetrics {
+  /** default route interface — the one the headline figures describe */
+  iface: string;
+  /** bytes per second */
+  rxSec: number;
+  txSec: number;
+  /** every interface that is up, primary included */
+  interfaces: InterfaceMetrics[];
+  /** link state of the wireless interface, null on wired-only hosts */
+  wifi: WifiMetrics | null;
 }
 
 export interface MetricsSnapshot {
@@ -89,6 +191,10 @@ export interface MetricsSnapshot {
   fan: FanMetrics;
   disk: DiskMetrics;
   network: NetworkMetrics;
+  /** null on hardware that doesn't expose the firmware throttle register */
+  throttle: ThrottleMetrics | null;
+  /** null without a power sensor (only the Pi 5 PMIC has one) */
+  power: PowerMetrics | null;
 }
 
 /**

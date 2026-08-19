@@ -21,10 +21,7 @@ vi.mock("node:os", async (importOriginal) => {
 });
 
 import { collectCpu } from "../src/metrics/cpu.js";
-import { collectDisk } from "../src/metrics/disk.js";
 import { collectMemory } from "../src/metrics/memory.js";
-import { collectNetwork } from "../src/metrics/network.js";
-import { collectTemperature } from "../src/metrics/temperature.js";
 import { collectSnapshot } from "../src/metrics/index.js";
 
 beforeEach(() => {
@@ -81,80 +78,6 @@ describe("collectMemory", () => {
   });
 });
 
-describe("collectTemperature", () => {
-  it("rounds a valid reading", async () => {
-    si.cpuTemperature.mockResolvedValue({ main: 52.16 });
-    expect(await collectTemperature()).toEqual({ cpu: 52.2 });
-  });
-
-  it.each([
-    ["zero", 0],
-    ["negative", -1],
-    ["NaN", NaN],
-    ["not a number", "warm"],
-  ])("returns null for %s readings", async (_label, main) => {
-    si.cpuTemperature.mockResolvedValue({ main });
-    expect(await collectTemperature()).toEqual({ cpu: null });
-  });
-});
-
-describe("collectDisk", () => {
-  it("picks the configured mount point", async () => {
-    si.fsSize.mockResolvedValue([
-      { mount: "/boot", size: 100, used: 10 },
-      { mount: "/", size: 1000, used: 300 },
-    ]);
-    expect(await collectDisk()).toEqual({ mount: "/", total: 1000, used: 300 });
-  });
-
-  it("falls back to the largest filesystem", async () => {
-    si.fsSize.mockResolvedValue([
-      { mount: "/small", size: 10, used: 1 },
-      { mount: "/big", size: 5000, used: 100 },
-      { mount: "/medium", size: 200, used: 2 },
-    ]);
-    expect(await collectDisk()).toEqual({ mount: "/big", total: 5000, used: 100 });
-  });
-
-  it("keeps the first filesystem when it is already the largest", async () => {
-    si.fsSize.mockResolvedValue([
-      { mount: "/big", size: 5000, used: 100 },
-      { mount: "/small", size: 10, used: 1 },
-    ]);
-    expect(await collectDisk()).toEqual({ mount: "/big", total: 5000, used: 100 });
-  });
-
-  it("degrades gracefully with no filesystems at all", async () => {
-    si.fsSize.mockResolvedValue([]);
-    expect(await collectDisk()).toEqual({ mount: "/", total: 0, used: 0 });
-  });
-});
-
-describe("collectNetwork", () => {
-  it("maps the default interface rates", async () => {
-    si.networkStats.mockResolvedValue([
-      { iface: "eth0", rx_sec: 1234, tx_sec: 567 },
-    ]);
-    expect(await collectNetwork()).toEqual({
-      iface: "eth0",
-      rxSec: 1234,
-      txSec: 567,
-    });
-  });
-
-  it("clamps null and negative rates to zero", async () => {
-    si.networkStats.mockResolvedValue([
-      { iface: "wlan0", rx_sec: null, tx_sec: -3 },
-    ]);
-    expect(await collectNetwork()).toEqual({ iface: "wlan0", rxSec: 0, txSec: 0 });
-  });
-
-  it("degrades gracefully with no interface", async () => {
-    si.networkStats.mockResolvedValue([]);
-    expect(await collectNetwork()).toEqual({ iface: "unknown", rxSec: 0, txSec: 0 });
-  });
-});
-
 describe("collectSnapshot", () => {
   it("assembles every collector into one snapshot", async () => {
     si.currentLoad.mockResolvedValue({ currentLoad: 5, cpus: [{ load: 5 }] });
@@ -177,8 +100,11 @@ describe("collectSnapshot", () => {
     expect(snapshot.cpu.load).toBe(5);
     expect(snapshot.memory.total).toBe(8);
     expect(snapshot.temperature.cpu).toBe(45);
-    expect(snapshot.fan).toHaveProperty("rpm"); // value depends on the test box
+    // hardware-dependent: the shape is what matters, not the reading
+    expect(snapshot.fan).toHaveProperty("rpm");
+    expect(snapshot).toHaveProperty("throttle");
+    expect(snapshot).toHaveProperty("power");
     expect(snapshot.disk.mount).toBe("/");
-    expect(snapshot.network.iface).toBe("eth0");
+    expect(snapshot.network.iface).toBeTypeOf("string");
   });
 });

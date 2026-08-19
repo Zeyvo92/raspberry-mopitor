@@ -73,7 +73,7 @@ describe("ContainerTable", () => {
       <ContainerTable containers={list(container({ state: "created" }))} />,
     );
     expect(screen.getByText("created")).toBeInTheDocument();
-    expect(dom.querySelector(".text-zinc-400")).not.toBeNull();
+    expect(dom.querySelector(".text-ink-muted")).not.toBeNull();
   });
 
   it("hides the uptime of a container that is not running", () => {

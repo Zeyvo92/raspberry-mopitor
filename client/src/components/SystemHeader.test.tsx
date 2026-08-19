@@ -1,4 +1,5 @@
 import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { CONFIG, renderWithI18n as render } from "../test-utils";
 import type { StaticInfo } from "../types";
@@ -19,6 +20,9 @@ const info: StaticInfo = {
   arch: "arm64",
   cpuModel: "ARM Cortex-A76",
   cores: 4,
+  governor: "ondemand",
+  cpuMaxGhz: 2.4,
+  storage: { device: "mmcblk0", name: "SC32G", lifeUsedPercent: 20 },
 };
 
 const config = CONFIG;
@@ -31,7 +35,9 @@ describe("SystemHeader", () => {
         config={null}
         uptime={null}
         connected={false}
+        kiosk={false}
         onChangeInterval={() => {}}
+        onToggleKiosk={() => {}}
       />,
     );
     expect(screen.getByText("raspberry-mopitor")).toBeInTheDocument();
@@ -50,7 +56,9 @@ describe("SystemHeader", () => {
         config={config}
         uptime={90061}
         connected={true}
+        kiosk={false}
         onChangeInterval={() => {}}
+        onToggleKiosk={() => {}}
       />,
     );
     expect(screen.getByText("raspberry")).toBeInTheDocument();
@@ -79,7 +87,9 @@ describe("SystemHeader", () => {
         config={config}
         uptime={null}
         connected={true}
+        kiosk={false}
         onChangeInterval={() => {}}
+        onToggleKiosk={() => {}}
       />,
     );
     const badge = screen.getByRole("link", { name: /v2\.0\.0 available/ });
@@ -101,7 +111,9 @@ describe("SystemHeader", () => {
         config={null}
         uptime={null}
         connected={true}
+        kiosk={false}
         onChangeInterval={() => {}}
+        onToggleKiosk={() => {}}
       />,
     );
     expect(screen.getByRole("link")).toHaveAttribute("href", "#");
@@ -115,7 +127,9 @@ describe("SystemHeader", () => {
         config={config}
         uptime={null}
         connected={true}
+        kiosk={false}
         onChangeInterval={onChangeInterval}
+        onToggleKiosk={() => {}}
       />,
     );
     const select = screen.getByTitle(/Sampling interval/);
@@ -135,9 +149,109 @@ describe("SystemHeader update badge", () => {
         config={config}
         uptime={null}
         connected={true}
+        kiosk={false}
         onChangeInterval={() => {}}
+        onToggleKiosk={() => {}}
       />,
     );
     expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  it("names the boot device and how worn it is", () => {
+    render(
+      <SystemHeader
+        info={info}
+        config={config}
+        uptime={null}
+        connected={true}
+        kiosk={false}
+        onChangeInterval={() => {}}
+        onToggleKiosk={() => {}}
+      />,
+    );
+    expect(
+      screen.getByText(/SC32G · 20% of write life used/),
+    ).toBeInTheDocument();
+  });
+
+  it("names a drive that reports no wear estimate, and says nothing without one", () => {
+    const { rerender } = render(
+      <SystemHeader
+        info={{
+          ...info,
+          storage: { device: "nvme0n1", name: null, lifeUsedPercent: null },
+        }}
+        config={config}
+        uptime={null}
+        connected={true}
+        kiosk={false}
+        onChangeInterval={() => {}}
+        onToggleKiosk={() => {}}
+      />,
+    );
+    expect(screen.getByText(/nvme0n1/)).toBeInTheDocument();
+    expect(screen.queryByText(/write life/)).not.toBeInTheDocument();
+
+    rerender(
+      <SystemHeader
+        info={{ ...info, storage: null }}
+        config={config}
+        uptime={null}
+        connected={true}
+        kiosk={false}
+        onChangeInterval={() => {}}
+        onToggleKiosk={() => {}}
+      />,
+    );
+    expect(screen.queryByText(/SC32G/)).not.toBeInTheDocument();
+  });
+
+  it("hands the kiosk toggle back to the app", async () => {
+    const onToggleKiosk = vi.fn();
+    render(
+      <SystemHeader
+        info={info}
+        config={config}
+        uptime={null}
+        connected={true}
+        kiosk={false}
+        onChangeInterval={() => {}}
+        onToggleKiosk={onToggleKiosk}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Kiosk mode" }));
+    expect(onToggleKiosk).toHaveBeenCalledOnce();
+  });
+
+  it("strips itself down to a way out in kiosk mode", () => {
+    render(
+      <SystemHeader
+        info={{
+          ...info,
+          app: {
+            version: "1.0.0",
+            latestVersion: "1.1.0",
+            updateAvailable: true,
+            releaseUrl: "https://example.test/release",
+          },
+        }}
+        config={config}
+        uptime={3600}
+        connected={true}
+        kiosk={true}
+        onChangeInterval={() => {}}
+        onToggleKiosk={() => {}}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Leave kiosk mode" })).toBeInTheDocument();
+    expect(screen.queryByTitle("Theme")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Language")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Raspberry Pi OS/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    // the hostname, the connection dot and the uptime survive
+    expect(screen.getByText("raspberry")).toBeInTheDocument();
+    expect(screen.getByText("1h 0m")).toBeInTheDocument();
   });
 });
