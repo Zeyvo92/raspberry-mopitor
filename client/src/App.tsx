@@ -3,15 +3,20 @@ import { CpuCard } from "./components/CpuCard";
 import { ContainerTable } from "./components/ContainerTable";
 import { DiskCard } from "./components/DiskCard";
 import { FanCard } from "./components/FanCard";
+import { FilesystemsCard } from "./components/FilesystemsCard";
 import { MemoryCard } from "./components/MemoryCard";
 import { NetworkCard } from "./components/NetworkCard";
+import { PowerCard } from "./components/PowerCard";
 import { ProcessTable } from "./components/ProcessTable";
 import { DEFAULT_RANGE_MS } from "./components/ranges";
 import { SystemHeader } from "./components/SystemHeader";
 import { Tabs, type TabId } from "./components/Tabs";
 import { TemperatureCard } from "./components/TemperatureCard";
+import { ThrottleAlert } from "./components/ThrottleAlert";
+import { ThrottleCard } from "./components/ThrottleCard";
 import { useMetrics } from "./hooks/useMetrics";
 import { useI18n } from "./i18n";
+import { useKiosk } from "./kiosk";
 import type { Topic } from "./types";
 
 // Recharts is by far the heaviest dependency: keep it out of the initial
@@ -30,6 +35,7 @@ const TAB_TOPICS: Record<TabId, Topic[]> = {
 
 export default function App() {
   const { t } = useI18n();
+  const { kiosk, toggleKiosk } = useKiosk();
   const [tab, setTab] = useState<TabId>("dashboard");
   const [rangeMs, setRangeMs] = useState(DEFAULT_RANGE_MS);
   // The subscription follows the selected tab; the server drops topics whose
@@ -56,8 +62,9 @@ export default function App() {
     return list;
   }, [features?.processes, features?.containers]);
 
-  // a selected tab can vanish on reconnect (feature turned off server-side)
-  const activeTab = tabs.includes(tab) ? tab : "dashboard";
+  // a selected tab can vanish on reconnect (feature turned off server-side);
+  // a kiosk screen only ever shows the dashboard
+  const activeTab = kiosk || !tabs.includes(tab) ? "dashboard" : tab;
 
   useEffect(() => {
     if (activeTab === "history" && features?.history) requestHistory(rangeMs);
@@ -76,10 +83,14 @@ export default function App() {
         config={config}
         uptime={metrics?.uptime ?? null}
         connected={connected}
+        kiosk={kiosk}
         onChangeInterval={setRefreshInterval}
+        onToggleKiosk={toggleKiosk}
       />
 
-      <Tabs tabs={tabs} active={activeTab} onChange={setTab} />
+      <ThrottleAlert throttle={metrics?.throttle ?? null} />
+
+      {!kiosk && <Tabs tabs={tabs} active={activeTab} onChange={setTab} />}
 
       <div
         role="tabpanel"
@@ -88,24 +99,40 @@ export default function App() {
       >
         {activeTab === "dashboard" &&
           (metrics ? (
-            <main className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <CpuCard cpu={metrics.cpu} />
+            <main
+              className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${
+                kiosk ? "" : "lg:grid-cols-3"
+              }`}
+            >
+              <CpuCard
+                cpu={metrics.cpu}
+                governor={staticInfo?.governor ?? null}
+                maxGhz={staticInfo?.cpuMaxGhz ?? null}
+              />
               <MemoryCard memory={metrics.memory} />
               <TemperatureCard temperature={metrics.temperature} />
               {/* only hardware with a tachometer reports a speed */}
               {metrics.fan.rpm !== null && <FanCard fan={metrics.fan} />}
+              {/* only the Pi 5 PMIC measures what the board draws */}
+              {metrics.power && <PowerCard power={metrics.power} />}
               <DiskCard disk={metrics.disk} />
+              {/* one filesystem is already the headline card's subject */}
+              {metrics.disk.filesystems.length > 1 && (
+                <FilesystemsCard filesystems={metrics.disk.filesystems} />
+              )}
               <NetworkCard network={metrics.network} />
+              {/* the firmware register exists on Pi hardware only */}
+              {metrics.throttle && <ThrottleCard throttle={metrics.throttle} />}
             </main>
           ) : (
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-ink-faint">
               {connected ? t("state.waiting") : t("state.connecting")}
             </p>
           ))}
 
         {activeTab === "history" && (
           <Suspense
-            fallback={<p className="text-sm text-zinc-500">{t("state.loading")}</p>}
+            fallback={<p className="text-sm text-ink-faint">{t("state.loading")}</p>}
           >
             <HistoryPanel
               series={history}

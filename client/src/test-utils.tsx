@@ -1,16 +1,22 @@
 import { render, type RenderOptions, type RenderResult } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
 import { I18nProvider } from "./i18n";
+import { ThemeProvider } from "./theme";
 import type { ConfigInfo, MetricsSnapshot, StaticInfo } from "./types";
 
-/** Every component reads its labels from the i18n context — wrap them all. */
+/**
+ * Every component reads its labels from the i18n context and its colours
+ * from the theme one — wrap them all.
+ */
 export function renderWithI18n(
   ui: ReactElement,
   options?: Omit<RenderOptions, "wrapper">,
 ): RenderResult {
   return render(ui, {
     wrapper: ({ children }: { children: ReactNode }) => (
-      <I18nProvider>{children}</I18nProvider>
+      <I18nProvider>
+        <ThemeProvider>{children}</ThemeProvider>
+      </I18nProvider>
     ),
     ...options,
   });
@@ -39,6 +45,9 @@ export const STATIC_INFO: StaticInfo = {
   arch: "arm64",
   cpuModel: "ARM Cortex-A76",
   cores: 4,
+  governor: "ondemand",
+  cpuMaxGhz: 2.4,
+  storage: { device: "mmcblk0", name: "SC32G", lifeUsedPercent: 20 },
 };
 
 export const SNAPSHOT: MetricsSnapshot = {
@@ -46,8 +55,10 @@ export const SNAPSHOT: MetricsSnapshot = {
   uptime: 3600,
   cpu: { load: 5, perCore: [5], freqGhz: null, loadAvg: [0, 0, 0] },
   memory: { total: 1000, used: 100, available: 900, swapTotal: 0, swapUsed: 0 },
-  temperature: { cpu: 45 },
+  temperature: { cpu: 45, sensors: [] },
   fan: { rpm: null },
-  disk: { mount: "/", total: 1000, used: 100 },
-  network: { iface: "eth0", rxSec: 0, txSec: 0 },
+  disk: { mount: "/", total: 1000, used: 100, filesystems: [], io: null },
+  network: { iface: "eth0", rxSec: 0, txSec: 0, interfaces: [], wifi: null },
+  throttle: null,
+  power: null,
 };

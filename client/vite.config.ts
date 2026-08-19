@@ -23,7 +23,13 @@ export default defineConfig({
       include: ["src/**"],
       // main.tsx is the DOM bootstrap; types.ts has no runtime code;
       // the rest is test scaffolding
-      exclude: ["src/main.tsx", "src/types.ts", "src/test-setup.ts", "src/test-utils.tsx"],
+      exclude: [
+        "src/main.tsx",
+        "src/types.ts",
+        "src/vite-env.d.ts",
+        "src/test-setup.ts",
+        "src/test-utils.tsx",
+      ],
       thresholds: {
         statements: 100,
         branches: 100,

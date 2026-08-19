@@ -11,7 +11,8 @@ import {
 import { formatAxisTime, formatTimestamp } from "../format";
 import { useI18n } from "../i18n";
 import type { HistoryPoint } from "../types";
-import { AXIS_TICK, CHART_CHROME } from "./theme";
+import { useTheme } from "../theme";
+import { axisTick, CHART_CHROME } from "./theme";
 
 /** numeric fields of a history point — the ones a chart can plot */
 export type MetricKey = {
@@ -55,20 +56,22 @@ export function HistoryChart({
   emptyLabel,
 }: HistoryChartProps) {
   const { locale, t } = useI18n();
+  const { theme } = useTheme();
+  const chrome = CHART_CHROME[theme];
   const primary = series[0]!;
   const stats = useMemo(() => summarise(points, primary.key), [points, primary.key]);
 
   return (
-    <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+    <section className="rounded-xl border border-line bg-surface p-4">
       <header className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
           {title}
         </h3>
         {stats && (
-          <p className="font-mono text-xs text-zinc-500">
+          <p className="font-mono text-xs text-ink-faint">
             {t("history.min")} {formatValue(stats.min)} · {t("history.avg")}{" "}
             {formatValue(stats.avg)} · {t("history.max")}{" "}
-            <span className="text-zinc-300">{formatValue(stats.max)}</span>
+            <span className="text-ink-soft">{formatValue(stats.max)}</span>
           </p>
         )}
       </header>
@@ -76,7 +79,7 @@ export function HistoryChart({
       {series.length > 1 && (
         <ul className="mb-2 flex flex-wrap gap-x-4 gap-y-1">
           {series.map((s) => (
-            <li key={s.key} className="flex items-center gap-1.5 text-xs text-zinc-400">
+            <li key={s.key} className="flex items-center gap-1.5 text-xs text-ink-muted">
               <span
                 aria-hidden
                 className="h-0.5 w-4 rounded-full"
@@ -92,7 +95,7 @@ export function HistoryChart({
         className={`h-40 transition-opacity duration-200 ${loading ? "opacity-50" : ""}`}
       >
         {stats === null && !loading ? (
-          <p className="flex h-full items-center justify-center text-sm text-zinc-600">
+          <p className="flex h-full items-center justify-center text-sm text-ink-ghost">
             {emptyLabel}
           </p>
         ) : (
@@ -102,29 +105,29 @@ export function HistoryChart({
               syncId="history"
               margin={{ top: 4, right: 8, bottom: 0, left: 0 }}
             >
-              <CartesianGrid stroke={CHART_CHROME.grid} vertical={false} />
+              <CartesianGrid stroke={chrome.grid} vertical={false} />
               <XAxis
                 dataKey="ts"
                 type="number"
                 scale="time"
                 domain={[from, to]}
                 tickFormatter={(ts: number) => formatAxisTime(ts, rangeMs, locale)}
-                tick={AXIS_TICK}
+                tick={axisTick(theme)}
                 tickLine={false}
-                axisLine={{ stroke: CHART_CHROME.axis }}
+                axisLine={{ stroke: chrome.axis }}
                 minTickGap={44}
               />
               <YAxis
                 domain={domain}
                 ticks={ticks}
                 tickFormatter={formatValue}
-                tick={AXIS_TICK}
+                tick={axisTick(theme)}
                 tickLine={false}
                 axisLine={false}
                 width={52}
               />
               <Tooltip
-                cursor={{ stroke: CHART_CHROME.cursor, strokeWidth: 1 }}
+                cursor={{ stroke: chrome.cursor, strokeWidth: 1 }}
                 isAnimationActive={false}
                 // Recharts clones this element with { active, payload }
                 content={
@@ -148,7 +151,7 @@ export function HistoryChart({
                   fill={s.color}
                   fillOpacity={0.1}
                   dot={false}
-                  activeDot={{ r: 3, strokeWidth: 2, stroke: CHART_CHROME.surface }}
+                  activeDot={{ r: 3, strokeWidth: 2, stroke: chrome.surface }}
                   // a hole in the data means the monitor was down: show the gap
                   connectNulls={false}
                   // redrawing 360 points several times a second on a Pi is not free
@@ -186,8 +189,8 @@ export function ChartTooltip({
   if (!active || !point) return null;
 
   return (
-    <div className="rounded-lg border border-zinc-700 bg-zinc-900/95 px-3 py-2 shadow-lg">
-      <p className="mb-1 text-xs text-zinc-500">{formatTimestamp(point.ts, locale)}</p>
+    <div className="rounded-lg border border-line-strong bg-surface/95 px-3 py-2 shadow-lg">
+      <p className="mb-1 text-xs text-ink-faint">{formatTimestamp(point.ts, locale)}</p>
       {series.map((s) => {
         const value = point[s.key];
         return (
@@ -197,10 +200,10 @@ export function ChartTooltip({
               className="h-0.5 w-3 shrink-0 rounded-full"
               style={{ backgroundColor: s.color }}
             />
-            <span className="font-mono font-semibold text-zinc-100">
+            <span className="font-mono font-semibold text-ink">
               {value === null ? "—" : formatValue(value)}
             </span>
-            <span className="text-zinc-400">{s.label}</span>
+            <span className="text-ink-muted">{s.label}</span>
           </p>
         );
       })}

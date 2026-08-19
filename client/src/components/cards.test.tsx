@@ -4,8 +4,10 @@ import { renderWithI18n as render } from "../test-utils";
 import { Bar, BigValue, Card, levelColor } from "./Card";
 import { CpuCard } from "./CpuCard";
 import { DiskCard } from "./DiskCard";
+import { FilesystemsCard } from "./FilesystemsCard";
 import { MemoryCard } from "./MemoryCard";
 import { NetworkCard } from "./NetworkCard";
+import { PowerCard } from "./PowerCard";
 import { TemperatureCard } from "./TemperatureCard";
 
 describe("Card primitives", () => {
@@ -82,37 +84,176 @@ describe("MemoryCard", () => {
 
 describe("TemperatureCard", () => {
   it("says so when no sensor exists", () => {
-    render(<TemperatureCard temperature={{ cpu: null }} />);
+    render(<TemperatureCard temperature={{ cpu: null, sensors: [] }} />);
     expect(screen.getByText("No sensor available")).toBeInTheDocument();
   });
 
   it("shows the temperature with a normal subtitle", () => {
-    render(<TemperatureCard temperature={{ cpu: 52.1 }} />);
+    render(<TemperatureCard temperature={{ cpu: 52.1, sensors: [] }} />);
     expect(screen.getByText("52.1°C")).toBeInTheDocument();
     expect(screen.getByText("CPU")).toBeInTheDocument();
+    expect(screen.queryByText("other probes")).not.toBeInTheDocument();
   });
 
   it("warns near the throttle limit", () => {
-    render(<TemperatureCard temperature={{ cpu: 80 }} />);
+    render(<TemperatureCard temperature={{ cpu: 80, sensors: [] }} />);
     expect(screen.getByText(/throttle limit/)).toBeInTheDocument();
+  });
+
+  it("lists the probes the SoC sensor doesn't cover", () => {
+    render(
+      <TemperatureCard
+        temperature={{ cpu: 52.1, sensors: [{ name: "nvme", celsius: 41.85 }] }}
+      />,
+    );
+    expect(screen.getByText("other probes")).toBeInTheDocument();
+    expect(screen.getByText("nvme")).toBeInTheDocument();
+    expect(screen.getByText("41.9°C")).toBeInTheDocument();
   });
 });
 
 describe("DiskCard", () => {
+  const gib = 1024 ** 3;
+  const disk = {
+    mount: "/host",
+    total: 100 * gib,
+    used: 30 * gib,
+    filesystems: [],
+    io: null,
+  };
+
   it("shows usage for the reported mount", () => {
-    const gib = 1024 ** 3;
-    render(<DiskCard disk={{ mount: "/host", total: 100 * gib, used: 30 * gib }} />);
+    render(<DiskCard disk={disk} />);
     expect(screen.getByRole("heading", { name: "Disk (/host)" })).toBeInTheDocument();
     expect(screen.getByText("30.0 GB")).toBeInTheDocument();
     expect(screen.getByText("30%")).toBeInTheDocument();
+    expect(screen.queryByText("read")).not.toBeInTheDocument();
+  });
+
+  it("adds throughput when the host reports it", () => {
+    render(<DiskCard disk={{ ...disk, io: { readSec: 2048, writeSec: 4096 } }} />);
+    expect(screen.getByText("read")).toBeInTheDocument();
+    expect(screen.getByText(/2\.0 KB\/s/)).toBeInTheDocument();
+    expect(screen.getByText(/4\.0 KB\/s/)).toBeInTheDocument();
+  });
+});
+
+describe("FilesystemsCard", () => {
+  it("lists every mount with its usage", () => {
+    const gib = 1024 ** 3;
+    render(
+      <FilesystemsCard
+        filesystems={[
+          { mount: "/", type: "ext4", total: 100 * gib, used: 50 * gib },
+          { mount: "/boot/firmware", type: "vfat", total: 512 * 1024 ** 2, used: 128 * 1024 ** 2 },
+        ]}
+      />,
+    );
+    expect(screen.getByText("/")).toBeInTheDocument();
+    expect(screen.getByText("/boot/firmware")).toBeInTheDocument();
+    expect(screen.getByText("ext4")).toBeInTheDocument();
+    expect(screen.getByText("50%")).toBeInTheDocument();
+    expect(screen.getByText("25%")).toBeInTheDocument();
   });
 });
 
 describe("NetworkCard", () => {
+  const network = {
+    iface: "eth0",
+    rxSec: 2048,
+    txSec: 1024,
+    interfaces: [],
+    wifi: null,
+  };
+
   it("shows both directions with the interface name", () => {
-    render(<NetworkCard network={{ iface: "eth0", rxSec: 2048, txSec: 1024 }} />);
+    render(<NetworkCard network={network} />);
     expect(screen.getByRole("heading", { name: "Network (eth0)" })).toBeInTheDocument();
     expect(screen.getByText(/2\.0 KB\/s/)).toBeInTheDocument();
     expect(screen.getByText(/1\.0 KB\/s/)).toBeInTheDocument();
+    expect(screen.queryByText("interfaces")).not.toBeInTheDocument();
+  });
+
+  it("lists the other interfaces but not the headline one", () => {
+    render(
+      <NetworkCard
+        network={{
+          ...network,
+          interfaces: [
+            { iface: "eth0", rxSec: 2048, txSec: 1024, rxBytes: 10, txBytes: 5 },
+            { iface: "wlan0", rxSec: 512, txSec: 256, rxBytes: 4, txBytes: 2 },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getByText("interfaces")).toBeInTheDocument();
+    expect(screen.getByText("wlan0")).toBeInTheDocument();
+    // the headline interface is already named in the card title
+    expect(screen.queryByText("eth0")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [70, "bg-emerald-500"],
+    [45, "bg-amber-500"],
+    [10, "bg-red-500"],
+  ])("colours a %i%% wifi link accordingly", (quality, expected) => {
+    const { container } = render(
+      <NetworkCard
+        network={{
+          ...network,
+          wifi: { iface: "wlan0", quality, signalDbm: -55 },
+        }}
+      />,
+    );
+    expect(screen.getByText("Wi-Fi (wlan0)")).toBeInTheDocument();
+    expect(screen.getByText("-55 dBm · link " + quality + "%")).toBeInTheDocument();
+    expect(container.querySelector(`.${expected}`)).not.toBeNull();
+  });
+
+  it("hides the bar when the driver reports no quality", () => {
+    render(
+      <NetworkCard
+        network={{
+          ...network,
+          wifi: { iface: "wlan0", quality: null, signalDbm: null },
+        }}
+      />,
+    );
+    expect(screen.getByText("Wi-Fi (wlan0)")).toBeInTheDocument();
+  });
+});
+
+describe("PowerCard", () => {
+  it("shows the total draw and ranks the rails", () => {
+    render(
+      <PowerCard
+        power={{
+          watts: 7.65,
+          rails: [
+            { name: "EXT5V", watts: 6 },
+            { name: "3v3_sys", watts: 1.65 },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("7.65 W")).toBeInTheDocument();
+    expect(screen.getByText("across 2 rails")).toBeInTheDocument();
+    expect(screen.getByText("EXT5V")).toBeInTheDocument();
+    expect(screen.getByText("1.65 W")).toBeInTheDocument();
+  });
+
+  it("survives a sensor that reports a total but no rail", () => {
+    render(<PowerCard power={{ watts: 0, rails: [] }} />);
+    expect(screen.getByText("0.00 W")).toBeInTheDocument();
+  });
+
+  it("draws an empty bar for a rail sitting at zero", () => {
+    const { container } = render(
+      <PowerCard power={{ watts: 0, rails: [{ name: "3v3_dac", watts: 0 }] }} />,
+    );
+    expect(container.querySelector<HTMLElement>(".bg-emerald-500\\/70")?.style.width).toBe(
+      "0%",
+    );
   });
 });

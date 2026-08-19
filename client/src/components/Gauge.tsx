@@ -41,7 +41,7 @@ export function Gauge({
             cx="50"
             cy="50"
             r={RADIUS}
-            className="stroke-zinc-800"
+            className="stroke-track"
             strokeDasharray={`${CIRCUMFERENCE * SWEEP} ${CIRCUMFERENCE}`}
           />
           <circle

@@ -92,4 +92,71 @@ describe("ProcessTable", () => {
     );
     expect(container.querySelector("td[style]")?.getAttribute("style")).toContain("0%");
   });
+
+  it("filters on the name, the user and the command line", async () => {
+    renderWithI18n(<ProcessTable processes={list} />);
+    const filter = screen.getByRole("searchbox", { name: "Filter processes" });
+
+    await userEvent.type(filter, "hungry");
+    expect(rowNames()).toHaveLength(1);
+    expect(rowNames()?.[0]).toContain("hungry");
+
+    await userEvent.clear(filter);
+    await userEvent.type(filter, "  PI  ");
+    expect(rowNames()).toHaveLength(2); // both run as "pi", case ignored
+
+    await userEvent.clear(filter);
+    await userEvent.type(filter, "dist/server.js");
+    expect(rowNames()).toHaveLength(2);
+
+    await userEvent.clear(filter);
+    await userEvent.type(filter, "nothing here");
+    expect(screen.getByText("No process matches this filter.")).toBeInTheDocument();
+  });
+
+  it("draws a CPU trend once a process has been seen twice", () => {
+    const { rerender } = renderWithI18n(<ProcessTable processes={list} />);
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+
+    // the same payload again is the same sample, not a second one
+    rerender(<ProcessTable processes={list} />);
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+
+    rerender(
+      <ProcessTable
+        processes={{
+          ...list,
+          ts: 2,
+          list: [
+            proc({ pid: 10, name: "busy", cpu: 40, memBytes: MB }),
+            proc({ pid: 20, name: "hungry", cpu: 0, memBytes: 800 * MB }),
+          ],
+        }}
+      />,
+    );
+
+    const trends = screen.getAllByRole("img");
+    expect(trends).toHaveLength(2);
+    expect(trends[0]).toHaveAccessibleName("busy — recent CPU usage");
+    expect(trends[0]?.querySelector("polyline")).toHaveAttribute(
+      "points",
+      "0.0,2.0 100.0,10.9",
+    );
+  });
+
+  it("forgets a process that exited", () => {
+    const { rerender } = renderWithI18n(<ProcessTable processes={list} />);
+    rerender(
+      <ProcessTable
+        processes={{ ...list, ts: 2, list: [proc({ pid: 10, name: "busy", cpu: 5 })] }}
+      />,
+    );
+    rerender(
+      <ProcessTable
+        processes={{ ...list, ts: 3, list: [proc({ pid: 20, name: "hungry", cpu: 5 })] }}
+      />,
+    );
+    // pid 20 came back with no history of its own: nothing to draw yet
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  });
 });

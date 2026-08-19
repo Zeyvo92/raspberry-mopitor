@@ -3,13 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark" />
-    <meta name="theme-color" content="#09090b" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#09090b" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f4f5" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta
       name="description"
       content="Live monitoring dashboard for Raspberry Pi — CPU, memory, temperature, disk, network, history, processes and containers."
     />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <title>raspberry-mopitor</title>
   </head>
   <body>

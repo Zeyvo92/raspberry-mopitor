@@ -24,7 +24,7 @@ export function Tabs({
     <nav
       role="tablist"
       aria-label={t("tab.dashboard")}
-      className="mb-4 flex gap-1 overflow-x-auto border-b border-zinc-800"
+      className="mb-4 flex gap-1 overflow-x-auto border-b border-line"
     >
       {tabs.map((tab) => (
         <button
@@ -37,8 +37,8 @@ export function Tabs({
           onClick={() => onChange(tab)}
           className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors ${
             tab === active
-              ? "border-emerald-500 text-zinc-100"
-              : "border-transparent text-zinc-500 hover:border-zinc-700 hover:text-zinc-300"
+              ? "border-emerald-500 text-ink"
+              : "border-transparent text-ink-faint hover:border-line-strong hover:text-ink-soft"
           }`}
         >
           {t(LABELS[tab])}

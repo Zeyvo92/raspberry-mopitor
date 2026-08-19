@@ -6,7 +6,7 @@ const STATE_STYLES: Record<string, string> = {
   running: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
   restarting: "border-amber-500/40 bg-amber-500/10 text-amber-400",
   paused: "border-amber-500/40 bg-amber-500/10 text-amber-400",
-  exited: "border-zinc-700 bg-zinc-800/60 text-zinc-400",
+  exited: "border-line-strong bg-track/60 text-ink-muted",
 };
 
 /**
@@ -21,27 +21,27 @@ export function ContainerTable({ containers }: { containers: ContainerList | nul
   const now = containers?.ts ?? Date.now();
 
   return (
-    <section className="rounded-xl border border-zinc-800 bg-zinc-900/60">
-      <header className="border-b border-zinc-800 px-4 py-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+    <section className="rounded-xl border border-line bg-surface">
+      <header className="border-b border-line px-4 py-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
           {t("containers.title")}
         </h2>
         {containers && (
-          <p className="mt-1 text-xs text-zinc-500">
+          <p className="mt-1 text-xs text-ink-faint">
             {t("containers.summary", { running, total: list.length })}
           </p>
         )}
       </header>
 
       {list.length === 0 ? (
-        <p className="px-4 py-6 text-sm text-zinc-500">
+        <p className="px-4 py-6 text-sm text-ink-faint">
           {containers ? t("containers.empty") : t("state.loading")}
         </p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-xs uppercase tracking-wider text-zinc-500">
+              <tr className="text-left text-xs uppercase tracking-wider text-ink-faint">
                 <th scope="col" className="px-4 py-2 font-medium">
                   {t("containers.name")}
                 </th>
@@ -66,12 +66,12 @@ export function ContainerTable({ containers }: { containers: ContainerList | nul
               {list.map((container) => (
                 <tr
                   key={container.id}
-                  className="border-t border-zinc-800/70 hover:bg-zinc-800/40"
+                  className="border-t border-line/70 hover:bg-line/40"
                 >
                   <td className="max-w-[18rem] px-4 py-1.5">
-                    <span className="block truncate text-zinc-200">{container.name}</span>
+                    <span className="block truncate text-ink">{container.name}</span>
                     <span
-                      className="block truncate text-xs text-zinc-600"
+                      className="block truncate text-xs text-ink-ghost"
                       title={container.image}
                     >
                       {container.image}
@@ -86,20 +86,20 @@ export function ContainerTable({ containers }: { containers: ContainerList | nul
                       {container.state}
                     </span>
                   </td>
-                  <td className="px-4 py-1.5 text-right font-mono text-zinc-300">
+                  <td className="px-4 py-1.5 text-right font-mono text-ink-soft">
                     {container.cpuPercent === null
                       ? "—"
                       : `${container.cpuPercent.toFixed(1)}%`}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-1.5 text-right font-mono text-zinc-300">
+                  <td className="whitespace-nowrap px-4 py-1.5 text-right font-mono text-ink-soft">
                     {container.memUsage === null ? "—" : formatBytes(container.memUsage)}
                     {container.memLimit ? (
-                      <span className="ml-2 text-xs text-zinc-500">
+                      <span className="ml-2 text-xs text-ink-faint">
                         / {formatBytes(container.memLimit)}
                       </span>
                     ) : null}
                   </td>
-                  <td className="hidden whitespace-nowrap px-4 py-1.5 text-right font-mono text-xs text-zinc-400 md:table-cell">
+                  <td className="hidden whitespace-nowrap px-4 py-1.5 text-right font-mono text-xs text-ink-muted md:table-cell">
                     {container.netRxSec === null || container.netTxSec === null ? (
                       "—"
                     ) : (
@@ -109,7 +109,7 @@ export function ContainerTable({ containers }: { containers: ContainerList | nul
                       </>
                     )}
                   </td>
-                  <td className="hidden px-4 py-1.5 text-right font-mono text-xs text-zinc-400 sm:table-cell">
+                  <td className="hidden px-4 py-1.5 text-right font-mono text-xs text-ink-muted sm:table-cell">
                     {container.state === "running" && container.startedAt > 0
                       ? formatUptime((now - container.startedAt) / 1000)
                       : "—"}

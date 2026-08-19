@@ -31,7 +31,7 @@ export function HistoryPanel({
 
   if (!available) {
     return (
-      <p className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 text-sm text-zinc-400">
+      <p className="rounded-xl border border-line bg-surface p-4 text-sm text-ink-muted">
         {t("history.disabled")}
       </p>
     );
@@ -56,8 +56,8 @@ export function HistoryPanel({
     <div className="space-y-4">
       {/* one filter row, above everything it scopes */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span className="text-xs text-zinc-500">{t("history.range")}</span>
-        <div className="flex flex-wrap gap-1 rounded-lg border border-zinc-800 bg-zinc-900 p-1">
+        <span className="text-xs text-ink-faint">{t("history.range")}</span>
+        <div className="flex flex-wrap gap-1 rounded-lg border border-line bg-surface p-1">
           {HISTORY_RANGES.map((range) => (
             <button
               key={range.key}
@@ -66,8 +66,8 @@ export function HistoryPanel({
               aria-pressed={range.ms === rangeMs}
               className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
                 range.ms === rangeMs
-                  ? "bg-zinc-700 text-zinc-100"
-                  : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                  ? "bg-raised text-ink"
+                  : "text-ink-muted hover:bg-track hover:text-ink"
               }`}
             >
               {t(range.key)}
@@ -75,7 +75,7 @@ export function HistoryPanel({
           ))}
         </div>
         {config && (
-          <span className="text-xs text-zinc-600">
+          <span className="text-xs text-ink-ghost">
             {t("history.recording", {
               interval: formatInterval(config.historyIntervalMs),
               hours: config.historyRetentionHours,
