@@ -218,7 +218,14 @@ proc /proc proc rw 0 0
   it("reports the busiest device and ignores one plugged in mid-interval", async () => {
     const root = await diskFixture({}, () => "");
     const diskstats = path.join(root, "diskstats");
-    await writeFile(diskstats, " 179 0 mmcblk0 0 0 0 0 0 0 0 0 0 0 0\n");
+    // three disks, listed in the order the kernel happens to enumerate them
+    await writeFile(
+      diskstats,
+      ` 259 0 nvme0n1 0 0 0 0 0 0 0 0 0 0 0
+ 179 0 mmcblk0 0 0 0 0 0 0 0 0 0 0 0
+   8 0 sda 0 0 0 0 0 0 0 0 0 0 0
+`,
+    );
 
     const read = createDiskReader({
       procMounts: "/nonexistent",
@@ -231,14 +238,26 @@ proc /proc proc rw 0 0
     vi.setSystemTime(1_700_000_001_000);
     await writeFile(
       diskstats,
-      ` 179 0 mmcblk0 10 0 0 100 0 0 0 0 0 100 0
- 259 0 nvme0n1 50 0 0 50 0 0 0 0 0 900 0
+      ` 259 0 nvme0n1 50 0 0 50 0 0 0 0 0 900 0
+ 179 0 mmcblk0 10 0 0 100 0 0 0 0 0 100 0
+   8 0 sda 0 0 0 0 0 0 0 0 0 0 0
+   8 16 sdb 5 0 0 5 0 0 0 0 0 500 0
 `,
     );
     const io = (await read()).io;
-    // the newcomer has no previous sample to subtract, so no rate for it
-    expect(io?.devices.map((device) => device.name)).toEqual(["mmcblk0"]);
-    expect(io?.utilPercent).toBe(10);
+    // sorted by name, and sdb has no previous sample to subtract from
+    expect(io?.devices.map((device) => device.name)).toEqual([
+      "mmcblk0",
+      "nvme0n1",
+      "sda",
+    ]);
+    expect(io?.iops).toBe(60);
+    // a disk that served nothing has no latency to report
+    expect(io?.devices.at(-1)).toMatchObject({ name: "sda", iops: 0, awaitMs: null });
+    // the NVMe was busy 900 ms of the second and served 50 requests in 50 ms
+    expect(io?.utilPercent).toBe(90);
+    expect(io?.awaitMs).toBe(1);
+
     // a device can queue requests in parallel and report more busy time than
     // the interval lasted: as a share of it, that is 100%
     vi.setSystemTime(1_700_000_002_000);
