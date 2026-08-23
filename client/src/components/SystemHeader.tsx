@@ -37,7 +37,9 @@ export function SystemHeader({
       : null;
 
   return (
-    <header className="mb-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+    // relative: the display menu hangs off the header's right edge, the one
+    // box on this page that always spans the full content width
+    <header className="relative mb-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
       <div className="min-w-0">
         <h1 className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xl font-bold text-ink">
           <span className="truncate">{info?.hostname ?? "raspberry-mopitor"}</span>

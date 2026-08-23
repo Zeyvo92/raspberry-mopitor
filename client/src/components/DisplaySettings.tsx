@@ -43,7 +43,10 @@ export function DisplaySettings({ available }: { available: readonly CardId[] })
   }, [open]);
 
   return (
-    <div className="relative" ref={container}>
+    // No positioning context of its own: the menu below anchors to the header
+    // (see SystemHeader), which is the only element here that always spans the
+    // full content width.
+    <div ref={container}>
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
@@ -64,7 +67,17 @@ export function DisplaySettings({ available }: { available: readonly CardId[] })
         <div
           role="dialog"
           aria-label={t("display.title")}
-          className="absolute right-0 z-20 mt-2 w-64 rounded-xl border border-line bg-surface p-3 shadow-lg"
+          className={
+            // Anchored to the header's right edge rather than to the ⚙
+            // itself: on a narrow screen the controls wrap and the button can
+            // end up anywhere along the row, which would hang a menu pinned to
+            // it off the side of the screen. The header always ends where the
+            // content does. The last two rules keep it inside a very narrow or
+            // a very short viewport.
+            "absolute right-0 top-full z-20 mt-2 w-64 rounded-xl border " +
+            "border-line bg-surface p-3 shadow-lg " +
+            "max-h-[70vh] max-w-[calc(100vw-2rem)] overflow-y-auto"
+          }
         >
           <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-muted">
             {t("display.cards")}
