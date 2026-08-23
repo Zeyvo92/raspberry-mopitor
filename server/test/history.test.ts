@@ -14,13 +14,23 @@ function snapshot(ts: number, over: Partial<MetricsSnapshot> = {}): MetricsSnaps
   return {
     ts,
     uptime: 1000,
-    cpu: { load: 25, perCore: [25], freqGhz: 1.8, loadAvg: [0.1, 0.2, 0.3] },
+    cpu: {
+      load: 25,
+      perCore: [25],
+      freqGhz: 1.8,
+      loadAvg: [0.1, 0.2, 0.3],
+      breakdown: null,
+      runQueue: null,
+      blocked: null,
+      ctxSwitchesSec: null,
+    },
     memory: {
       total: 4_000_000_000,
       used: 1_000_000_000,
       available: 3_000_000_000,
       swapTotal: 0,
       swapUsed: 0,
+      detail: null,
     },
     temperature: { cpu: 50, sensors: [] },
     fan: { rpm: 3000 },
@@ -28,10 +38,21 @@ function snapshot(ts: number, over: Partial<MetricsSnapshot> = {}): MetricsSnaps
       mount: "/",
       total: 32_000_000_000,
       used: 8_000_000_000,
+      inodesTotal: 0,
+      inodesUsed: 0,
+      readOnly: null,
       filesystems: [],
       io: null,
     },
-    network: { iface: "eth0", rxSec: 1000, txSec: 500, interfaces: [], wifi: null },
+    network: {
+      iface: "eth0",
+      rxSec: 1000,
+      txSec: 500,
+      interfaces: [],
+      wifi: null,
+      tcp: null,
+    },
+    pressure: null,
     throttle: null,
     power: null,
     energy: null,
@@ -44,7 +65,35 @@ const drawing = (watts: number) => ({
 });
 
 const cpuAt = (load: number) => ({
-  cpu: { load, perCore: [], freqGhz: null, loadAvg: [0, 0, 0] as [number, number, number] },
+  cpu: {
+    load,
+    perCore: [],
+    freqGhz: null,
+    loadAvg: [0, 0, 0] as [number, number, number],
+    breakdown: null,
+    runQueue: null,
+    blocked: null,
+    ctxSwitchesSec: null,
+  },
+});
+
+/** the two series the I/O chart draws, as a snapshot carries them */
+const stalling = (iowait: number, pressure: number) => ({
+  cpu: {
+    load: 100,
+    perCore: [],
+    freqGhz: null,
+    loadAvg: [0, 0, 0] as [number, number, number],
+    breakdown: { user: 5, system: 5, iowait, irq: 0, steal: 0 },
+    runQueue: 1,
+    blocked: 2,
+    ctxSwitchesSec: 500,
+  },
+  pressure: {
+    cpu: null,
+    io: { avg10: pressure, avg60: 0, avg300: 0 },
+    memory: null,
+  },
 });
 
 async function memoryStore(intervalMs = 10_000, retentionHours = 24): Promise<HistoryStore> {
@@ -131,6 +180,17 @@ describe("history store", () => {
     expect(scheduled.query(3 * 3600_000).points.every((p) => p.cpu === null)).toBe(true);
     scheduled.close();
     vi.useRealTimers();
+  });
+
+  it("records iowait and I/O pressure next to the rest", () => {
+    const bucket = Math.floor(Date.now() / 10_000) * 10_000;
+    store.record(snapshot(bucket - 20_000, stalling(30, 12.5)));
+    // a machine with no /proc/stat and no PSI leaves both empty
+    store.record(snapshot(bucket - 10_000));
+
+    const filled = store.query(60_000).points.filter((p) => p.cpu !== null);
+    expect(filled[0]).toMatchObject({ cpuIowait: 30, ioPressure: 12.5 });
+    expect(filled[1]).toMatchObject({ cpuIowait: null, ioPressure: null });
   });
 
   it("averages the power draw alongside the rest", () => {
@@ -266,9 +326,10 @@ describe("history store failure modes", () => {
 
     const store = await openHistoryStore({ file, intervalMs: 10_000, retentionHours: 1 });
     expect(store).not.toBeNull();
-    store!.record(snapshot(Date.now(), drawing(3.5)));
+    store!.record(snapshot(Date.now(), { ...drawing(3.5), ...stalling(12, 4) }));
     const point = store!.query(60_000).points.find((p) => p.cpu !== null);
-    expect(point?.power).toBe(3.5); // the old rows simply have none
+    // the old rows simply have none of the three columns added since
+    expect(point).toMatchObject({ power: 3.5, cpuIowait: 12, ioPressure: 4 });
     store!.close();
     await rm(dir, { recursive: true, force: true });
   });

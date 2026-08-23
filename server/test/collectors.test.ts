@@ -20,9 +20,18 @@ vi.mock("node:os", async (importOriginal) => {
   return { default: { ...real, loadavg } };
 });
 
-import { collectCpu } from "../src/metrics/cpu.js";
-import { collectMemory } from "../src/metrics/memory.js";
+import { createCpuReader } from "../src/metrics/cpu.js";
+import { createMemoryReader } from "../src/metrics/memory.js";
 import { collectSnapshot } from "../src/metrics/index.js";
+import { EMPTY_PROC_STAT, type ProcStatMetrics } from "../src/metrics/procstat.js";
+
+/** the runner's own /proc would make these assertions machine-dependent */
+const collectCpu = (stat: ProcStatMetrics = EMPTY_PROC_STAT) =>
+  createCpuReader(async () => stat)();
+const collectMemory = createMemoryReader({
+  procMeminfo: "/nonexistent",
+  procVmstat: "/nonexistent",
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -42,7 +51,21 @@ describe("collectCpu", () => {
       perCore: [10.6, 0],
       freqGhz: 1.8,
       loadAvg: [0.5, 0.3, 0.1],
+      ...EMPTY_PROC_STAT,
     });
+  });
+
+  it("carries the /proc/stat split and queue depths through", async () => {
+    si.currentLoad.mockResolvedValue({ currentLoad: 0, cpus: [] });
+    si.cpuCurrentSpeed.mockResolvedValue({ avg: 0 });
+
+    const stat: ProcStatMetrics = {
+      breakdown: { user: 4, system: 2, iowait: 30, irq: 1, steal: 0 },
+      runQueue: 3,
+      blocked: 2,
+      ctxSwitchesSec: 1200,
+    };
+    expect(await collectCpu(stat)).toMatchObject(stat);
   });
 
   it("reports null frequency when unavailable", async () => {
@@ -74,6 +97,8 @@ describe("collectMemory", () => {
       available: 600,
       swapTotal: 200,
       swapUsed: 50,
+      // no /proc/meminfo to read: the headline figures stand alone
+      detail: null,
     });
   });
 });
@@ -103,6 +128,7 @@ describe("collectSnapshot", () => {
     // hardware-dependent: the shape is what matters, not the reading
     expect(snapshot.fan).toHaveProperty("rpm");
     expect(snapshot).toHaveProperty("throttle");
+    expect(snapshot).toHaveProperty("pressure");
     expect(snapshot).toHaveProperty("power");
     expect(snapshot.disk.mount).toBe("/");
     expect(snapshot.network.iface).toBeTypeOf("string");

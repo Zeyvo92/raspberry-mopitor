@@ -13,6 +13,7 @@ vi.mock("systeminformation", () => ({ default: si }));
 import {
   collectStaticInfo,
   parseLifeTime,
+  parsePreEol,
   readCpuFreqPolicy,
   readHardwareModel,
   readHostOsRelease,
@@ -125,6 +126,7 @@ describe("collectStaticInfo", () => {
       device: "mmcblk0",
       name: "SC32G",
       lifeUsedPercent: 20,
+      preEol: null,
     });
   });
 
@@ -193,17 +195,38 @@ describe("parseLifeTime", () => {
   });
 });
 
+describe("parsePreEol", () => {
+  it("maps the three bands the controller can report", () => {
+    expect(parsePreEol("0x01\n")).toBe("normal");
+    expect(parsePreEol("0x02")).toBe("warning");
+    expect(parsePreEol("0x03")).toBe("urgent");
+  });
+
+  it("returns null for a card that doesn't implement the field", () => {
+    expect(parsePreEol("0x00")).toBeNull();
+    expect(parsePreEol(null)).toBeNull();
+    expect(parsePreEol("nonsense")).toBeNull();
+  });
+});
+
 describe("readStorageHealth", () => {
   it("prefers the SD card over other block devices", async () => {
     const root = await fixtureDir({
       "sda": { device: { model: "Portable SSD\n" } },
-      "mmcblk0": { device: { name: "SC32G\n", life_time: "0x03 0x01\n" } },
+      "mmcblk0": {
+        device: {
+          "name": "SC32G\n",
+          "life_time": "0x03 0x01\n",
+          "pre_eol_info": "0x02\n",
+        },
+      },
       "loop0": {},
     });
     expect(await readStorageHealth(root)).toEqual({
       device: "mmcblk0",
       name: "SC32G",
       lifeUsedPercent: 30,
+      preEol: "warning",
     });
   });
 
@@ -213,6 +236,7 @@ describe("readStorageHealth", () => {
       device: "nvme0n1",
       name: "WD SN570",
       lifeUsedPercent: null,
+      preEol: null,
     });
   });
 
