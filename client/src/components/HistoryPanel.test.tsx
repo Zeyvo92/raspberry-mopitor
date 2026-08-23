@@ -32,6 +32,8 @@ const point = (ts: number, over: Partial<HistoryPoint> = {}): HistoryPoint => ({
   netTx: 500,
   fanRpm: 3000,
   power: 4.2,
+  cpuIowait: 3,
+  ioPressure: 1.5,
   ...over,
 });
 
@@ -137,6 +139,35 @@ describe("HistoryPanel", () => {
     expect(screen.getByText("0 W")).toBeInTheDocument();
     expect(screen.getAllByText("5.0 W").length).toBeGreaterThan(0);
     expect(screen.getByText("12 W")).toBeInTheDocument(); // the peak drawn
+  });
+
+  it("charts iowait next to I/O pressure", () => {
+    renderPanel({
+      series: {
+        ...series,
+        points: [
+          point(0, { cpuIowait: 20, ioPressure: 8 }),
+          // one series can be there without the other: /proc/stat and PSI
+          // are two different kernel features
+          point(10_000, { cpuIowait: null, ioPressure: 4 }),
+        ],
+      },
+    });
+    expect(
+      screen.getByRole("heading", { name: "I/O wait & pressure" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("CPU iowait")).toBeInTheDocument();
+    expect(screen.getByText("I/O pressure")).toBeInTheDocument();
+  });
+
+  it("drops the I/O chart on a host that measures neither", () => {
+    renderPanel({
+      series: {
+        ...series,
+        points: [point(0, { cpuIowait: null, ioPressure: null })],
+      },
+    });
+    expect(screen.queryByRole("heading", { name: "I/O wait & pressure" })).toBeNull();
   });
 
   it("drops the power chart on a board that never reported a watt", () => {

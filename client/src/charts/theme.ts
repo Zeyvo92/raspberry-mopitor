@@ -13,11 +13,15 @@ import type { ResolvedTheme } from "../theme";
  * alone on its own chart, where it cannot be mistaken for the temperature
  * orange.
  *
- * The only chart carrying two series at once is the network one, and that
- * pair is the one that has to survive colour-vision deficiency: download and
- * upload separate by ΔE 12.7 (deutan, OKLab x100) and 30.3 with normal
- * vision, well past the ΔE 8 / 15 floors. Both are also labelled, so identity
+ * Two charts carry two series at once, and those pairs are the ones that have
+ * to survive colour-vision deficiency. Network: download and upload separate
+ * by ΔE 12.7 (deutan, OKLab x100) and 30.3 with normal vision. I/O: iowait
+ * indigo and pressure rose separate by ΔE 26.7 (protan) and 32.8 normal. Both
+ * floors are ΔE 8 / 15, and every series is labelled as well, so identity
  * never rests on colour alone.
+ *
+ * Separation is checked pair by pair, within a chart: two series a reader
+ * never sees side by side have no reason to be told apart.
  */
 export const CHART_COLORS = {
   cpu: "#0eaa78",
@@ -26,6 +30,8 @@ export const CHART_COLORS = {
   netDown: "#0c9ad9",
   netUp: "#ec4899",
   power: "#ca8a04",
+  iowait: "#6366f1",
+  ioPressure: "#e11d48",
 } as const;
 
 /** Chart chrome: recessive by design — the data is the only thing with weight. */

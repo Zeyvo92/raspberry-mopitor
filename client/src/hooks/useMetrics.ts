@@ -201,6 +201,8 @@ function extend(
     netTx: Math.round(snapshot.network.txSec),
     fanRpm: snapshot.fan.rpm,
     power: snapshot.power?.watts ?? null,
+    cpuIowait: snapshot.cpu.breakdown?.iowait ?? null,
+    ioPressure: snapshot.pressure?.io?.avg10 ?? null,
   };
 
   const cutoff = ts - series.rangeMs;

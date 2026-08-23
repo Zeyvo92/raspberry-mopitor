@@ -9,6 +9,7 @@ import {
   createNetworkReader,
   parseDefaultIface,
   parseProcNetDev,
+  parseSnmpTcp,
   parseWireless,
 } from "../src/metrics/network.js";
 import { cleanupFixtures, fixtureDir } from "./fixtures.js";
@@ -43,8 +44,65 @@ describe("parseProcNetDev", () => {
       "  bad: nope\n" +
       "  : 1 2 3\n";
     expect(parseProcNetDev(content)).toEqual([
-      { iface: "eth0", rxBytes: 100, txBytes: 200 },
+      {
+        iface: "eth0",
+        rxBytes: 100,
+        txBytes: 200,
+        rxPackets: 10,
+        txPackets: 8,
+        errors: 0,
+        drops: 0,
+      },
     ]);
+  });
+
+  it("sums errors and drops across both directions", () => {
+    const content = `${NET_DEV_HEADER}  eth0: 100 10 3 4 0 0 0 0 200 8 1 2 0 0 0 0
+  wlan0: 50 5 0 0 0 0 0 0 60 6
+`;
+    expect(parseProcNetDev(content)).toEqual([
+      {
+        iface: "eth0",
+        rxBytes: 100,
+        txBytes: 200,
+        rxPackets: 10,
+        txPackets: 8,
+        errors: 4, // 3 received + 1 sent
+        drops: 6, // 4 received + 2 sent
+      },
+      // a row cut short before the transmit counters still counts what it
+      // did report
+      {
+        iface: "wlan0",
+        rxBytes: 50,
+        txBytes: 60,
+        rxPackets: 5,
+        txPackets: 6,
+        errors: 0,
+        drops: 0,
+      },
+    ]);
+  });
+});
+
+describe("parseSnmpTcp", () => {
+  const SNMP = `Ip: Forwarding DefaultTTL
+Ip: 1 64
+Tcp: RtoAlgorithm CurrEstab InSegs RetransSegs
+Tcp: 1 20 8365 27
+`;
+
+  it("pairs the TCP header with its values", () => {
+    expect(parseSnmpTcp(SNMP)).toEqual({ established: 20, retransSegs: 27 });
+  });
+
+  it("returns null when the columns it needs are missing", () => {
+    expect(parseSnmpTcp("Tcp: RtoAlgorithm InSegs\nTcp: 1 8365\n")).toBeNull();
+    expect(parseSnmpTcp("Udp: InDatagrams\nUdp: 3\n")).toBeNull();
+    // a header with no value line under it, with and without a trailing
+    // newline: the file was truncated mid-write
+    expect(parseSnmpTcp("Tcp: CurrEstab RetransSegs\n")).toBeNull();
+    expect(parseSnmpTcp("Tcp: CurrEstab RetransSegs")).toBeNull();
   });
 });
 
@@ -105,21 +163,38 @@ describe("createNetworkReader", () => {
     dev?: string;
     route?: string;
     wireless?: string;
+    snmp?: string;
+    /** one directory per interface, as /sys/class/net publishes them */
+    classNet?: Record<string, Record<string, string>>;
   }) {
     const root = await fixtureDir({
       dev: files.dev ?? "",
       ...(files.route === undefined ? {} : { route: files.route }),
       ...(files.wireless === undefined ? {} : { wireless: files.wireless }),
+      ...(files.snmp === undefined ? {} : { snmp: files.snmp }),
+      ...(files.classNet === undefined ? {} : { class: files.classNet }),
     });
     return {
       root,
       read: createNetworkReader({
         procNetDev: path.join(root, "dev"),
         procNetRoute: path.join(root, "route"),
+        procNetSnmp: path.join(root, "snmp"),
+        sysClassNet: path.join(root, "class"),
         wirelessPath: path.join(root, "wireless"),
       }),
     };
   }
+
+  /** what every interface reports when nothing else is configured */
+  const BARE = {
+    rxPacketsSec: 0,
+    txPacketsSec: 0,
+    errors: 0,
+    drops: 0,
+    speedMbps: null,
+    duplex: null,
+  };
 
   it("reports zero on the first sample, then bytes per second", async () => {
     const { root, read } = await reader({
@@ -131,8 +206,11 @@ describe("createNetworkReader", () => {
       iface: "eth0",
       rxSec: 0,
       txSec: 0,
-      interfaces: [{ iface: "eth0", rxSec: 0, txSec: 0, rxBytes: 1000, txBytes: 500 }],
+      interfaces: [
+        { iface: "eth0", rxSec: 0, txSec: 0, rxBytes: 1000, txBytes: 500, ...BARE },
+      ],
       wifi: null,
+      tcp: null,
     });
 
     vi.setSystemTime(1_700_000_002_000); // two seconds later
@@ -183,6 +261,7 @@ describe("createNetworkReader", () => {
       txSec: 0,
       interfaces: [],
       wifi: null,
+      tcp: null,
     });
   });
 
@@ -196,9 +275,10 @@ describe("createNetworkReader", () => {
       rxSec: 1235,
       txSec: 0,
       interfaces: [
-        { iface: "en0", rxSec: 1235, txSec: 0, rxBytes: 99, txBytes: 0 },
+        { iface: "en0", rxSec: 1235, txSec: 0, rxBytes: 99, txBytes: 0, ...BARE },
       ],
       wifi: null,
+      tcp: null,
     });
 
     si.networkStats.mockResolvedValue([
@@ -213,7 +293,72 @@ describe("createNetworkReader", () => {
       txSec: 0,
       interfaces: [],
       wifi: null,
+      tcp: null,
     });
+  });
+
+  it("counts errors and drops, and turns packets into a rate", async () => {
+    const row = (rxBytes: number, rxPackets: number, txPackets: number) =>
+      `${NET_DEV_HEADER}  eth0: ${rxBytes} ${rxPackets} 2 3 0 0 0 0 500 ${txPackets} 1 0 0 0 0 0\n`;
+    const { root, read } = await reader({ dev: row(1000, 100, 40) });
+    await read();
+
+    vi.setSystemTime(1_700_000_002_000);
+    await writeFile(path.join(root, "dev"), row(2000, 300, 140));
+    const [primary] = (await read()).interfaces;
+    expect(primary).toMatchObject({
+      rxPacketsSec: 100, // 200 packets over 2 s
+      txPacketsSec: 50,
+      errors: 3, // counters, not rates: they are read as "since boot"
+      drops: 3,
+    });
+  });
+
+  it("reads the negotiated link once, and ignores a driver that shrugs", async () => {
+    const { read } = await reader({
+      dev: netDev({ eth0: [1, 1], wlan0: [1, 1] }),
+      classNet: {
+        eth0: { speed: "1000\n", duplex: "full\n" },
+        // Wi-Fi doesn't negotiate: -1 and "unknown" are what the kernel gives
+        wlan0: { speed: "-1\n", duplex: "unknown\n" },
+      },
+    });
+
+    const byName = Object.fromEntries(
+      (await read()).interfaces.map((entry) => [entry.iface, entry]),
+    );
+    expect(byName["eth0"]).toMatchObject({ speedMbps: 1000, duplex: "full" });
+    expect(byName["wlan0"]).toMatchObject({ speedMbps: null, duplex: null });
+
+    // the second tick is served from the cache: nothing is read again for
+    // another 30 s, whatever the refresh rate
+    vi.setSystemTime(1_700_000_000_500);
+    expect((await read()).interfaces[0]).toMatchObject({ speedMbps: 1000 });
+    vi.setSystemTime(1_700_000_060_000);
+    expect((await read()).interfaces[0]).toMatchObject({ speedMbps: 1000 });
+  });
+
+  it("counts established connections and retransmissions per second", async () => {
+    const snmp = (retrans: number) =>
+      `Tcp: RtoAlgorithm CurrEstab RetransSegs\nTcp: 1 12 ${retrans}\n`;
+    const { root, read } = await reader({
+      dev: netDev({ eth0: [1, 1] }),
+      snmp: snmp(100),
+    });
+    // first sample: a counter with nothing to compare against
+    expect((await read()).tcp).toEqual({ established: 12, retransSegsSec: null });
+
+    vi.setSystemTime(1_700_000_004_000);
+    await writeFile(path.join(root, "snmp"), snmp(110));
+    expect((await read()).tcp).toEqual({ established: 12, retransSegsSec: 2.5 });
+  });
+
+  it("leaves TCP null when /proc/net/snmp says nothing useful", async () => {
+    const { read } = await reader({
+      dev: netDev({ eth0: [1, 1] }),
+      snmp: "Udp: InDatagrams\nUdp: 3\n",
+    });
+    expect((await read()).tcp).toBeNull();
   });
 
   it("reports zero when two samples land in the same millisecond", async () => {

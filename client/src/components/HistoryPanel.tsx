@@ -51,7 +51,13 @@ export function HistoryPanel({
   const networkScale = scaleFromZero(peak(points, "netRx", "netTx"), { binary: true });
   // a board with no sensor and no estimate never recorded a watt: no chart
   const hasPower = points.some((point) => point.power !== null);
+  // same rule for I/O: a kernel without PSI and a host without /proc/stat
+  // record nothing here, and an empty pane would say less than no pane
+  const hasIo = points.some(
+    (point) => point.cpuIowait !== null || point.ioPressure !== null,
+  );
   const powerScale = scaleFromZero(peak(points, "power"));
+  const ioScale = scaleFromZero(peak(points, "cpuIowait", "ioPressure"));
   const temperatures = extent(points, "cpuTemp");
   const temperatureScale = temperatures
     ? scaleAround(temperatures[0], temperatures[1], { pad: 2 })
@@ -154,6 +160,34 @@ export function HistoryPanel({
           loading={loading}
           emptyLabel={empty}
         />
+        {hasIo && (
+          <HistoryChart
+            title={t("history.io")}
+            points={points}
+            series={[
+              {
+                key: "cpuIowait",
+                label: t("history.cpuIowait"),
+                color: CHART_COLORS.iowait,
+              },
+              {
+                key: "ioPressure",
+                label: t("history.ioPressure"),
+                color: CHART_COLORS.ioPressure,
+              },
+            ]}
+            rangeMs={rangeMs}
+            from={from}
+            to={to}
+            // both series are a share of the interval; they rarely leave the
+            // bottom of a 0-100 axis, so this one follows its own peak
+            domain={ioScale.domain}
+            ticks={ioScale.ticks}
+            formatValue={percentTick}
+            loading={loading}
+            emptyLabel={empty}
+          />
+        )}
         {hasPower && (
           <HistoryChart
             title={t("history.power")}

@@ -6,6 +6,7 @@ import { collectDisk } from "./disk.js";
 import { collectFan } from "./fan.js";
 import { collectMemory } from "./memory.js";
 import { collectNetwork } from "./network.js";
+import { collectPressure } from "./pressure.js";
 import { collectPower, estimatePower } from "./power.js";
 import { collectTemperature } from "./temperature.js";
 import { collectThrottle } from "./throttle.js";
@@ -23,18 +24,29 @@ export { collectContainers, isDockerAvailable } from "./docker.js";
 export async function collectSnapshot(
   energy: EnergyMetrics | null = null,
 ): Promise<MetricsSnapshot> {
-  const [cpu, memory, temperature, fan, disk, network, throttle, sensed, time] =
-    await Promise.all([
-      collectCpu(),
-      collectMemory(),
-      collectTemperature(),
-      collectFan(),
-      collectDisk(),
-      collectNetwork(),
-      collectThrottle(),
-      collectPower(),
-      si.time(),
-    ]);
+  const [
+    cpu,
+    memory,
+    temperature,
+    fan,
+    disk,
+    network,
+    pressure,
+    throttle,
+    sensed,
+    time,
+  ] = await Promise.all([
+    collectCpu(),
+    collectMemory(),
+    collectTemperature(),
+    collectFan(),
+    collectDisk(),
+    collectNetwork(),
+    collectPressure(),
+    collectThrottle(),
+    collectPower(),
+    si.time(),
+  ]);
 
   // no sensor on the board: fall back to the modelled draw, which needs the
   // CPU load and therefore can only run once the readings above are in
@@ -50,6 +62,7 @@ export async function collectSnapshot(
     fan,
     disk,
     network,
+    pressure,
     throttle,
     power,
     energy,

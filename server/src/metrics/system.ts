@@ -83,6 +83,25 @@ export function parseLifeTime(raw: string | null): number | null {
   return Math.min(Math.max(...bands) * 10, 100);
 }
 
+/**
+ * The same controller also publishes a coarser verdict: "normal", "warning"
+ * (~80% of the rated life consumed) or "urgent". Some cards fill this in
+ * while leaving the life-time bands at zero, so it is worth reading both.
+ */
+export function parsePreEol(raw: string | null): "normal" | "warning" | "urgent" | null {
+  switch (raw?.trim().toLowerCase()) {
+    case "0x01":
+      return "normal";
+    case "0x02":
+      return "warning";
+    case "0x03":
+      return "urgent";
+    // "0x00" is the card saying it doesn't implement the field
+    default:
+      return null;
+  }
+}
+
 export async function readStorageHealth(
   blockRoot: string = config.blockRoot,
 ): Promise<StorageHealth | null> {
@@ -94,16 +113,18 @@ export async function readStorageHealth(
   if (device === undefined) return null;
 
   const dir = path.join(blockRoot, device, "device");
-  const [name, model, lifeTime] = await Promise.all([
+  const [name, model, lifeTime, preEol] = await Promise.all([
     readText(path.join(dir, "name")),
     readText(path.join(dir, "model")),
     readText(path.join(dir, "life_time")),
+    readText(path.join(dir, "pre_eol_info")),
   ]);
 
   return {
     device,
     name: name ?? model,
     lifeUsedPercent: parseLifeTime(lifeTime),
+    preEol: parsePreEol(preEol),
   };
 }
 

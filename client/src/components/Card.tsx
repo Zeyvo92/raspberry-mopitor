@@ -59,3 +59,44 @@ export function BigValue({ children, sub }: { children: ReactNode; sub?: string 
     </div>
   );
 }
+
+/**
+ * A card's second layer: dense label/value pairs under a rule.
+ *
+ * Everything in here is context rather than headline — iowait next to the
+ * load, inodes next to the free space — so the display settings gate it as a
+ * group ("detailed rows") and the default dashboard stays as short as it was.
+ */
+export function Details({
+  items,
+}: {
+  items: { label: string; value: string }[];
+}) {
+  if (items.length === 0) return null;
+  return (
+    <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 border-t border-line pt-2 text-xs">
+      {items.map((item) => (
+        <div key={item.label} className="flex items-baseline justify-between gap-2">
+          <dt className="truncate text-ink-faint">{item.label}</dt>
+          <dd className="shrink-0 font-mono text-ink-soft">{item.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/**
+ * An abnormal condition, shown whatever the display settings say: a
+ * filesystem the kernel remounted read-only or a process killed out of
+ * memory is not a detail a reader chose to hide.
+ */
+export function Notice({ children }: { children: ReactNode }) {
+  return (
+    <p
+      role="status"
+      className="mt-3 rounded-md border border-red-500/40 bg-red-500/10 px-2 py-1 text-xs text-red-400"
+    >
+      {children}
+    </p>
+  );
+}

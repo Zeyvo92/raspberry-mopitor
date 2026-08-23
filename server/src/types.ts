@@ -31,6 +31,12 @@ export interface StorageHealth {
   name: string | null;
   /** rated life already used, percent — null when the device doesn't report it */
   lifeUsedPercent: number | null;
+  /**
+   * The controller's own verdict on remaining life, one step coarser than
+   * `lifeUsedPercent` but available on cards that don't publish the bands:
+   * "warning" means ~80% consumed, "urgent" means replace it now.
+   */
+  preEol: "normal" | "warning" | "urgent" | null;
 }
 
 export interface StaticInfo {
@@ -52,6 +58,19 @@ export interface StaticInfo {
   storage: StorageHealth | null;
 }
 
+/**
+ * Where the CPU's time actually goes, percent of the interval. `iowait` is
+ * the one that earns its place: a Pi pinned at 100% "busy" waiting on its SD
+ * card looks exactly like a Pi doing real work until you split them apart.
+ */
+export interface CpuBreakdown {
+  user: number;
+  system: number;
+  iowait: number;
+  irq: number;
+  steal: number;
+}
+
 export interface CpuMetrics {
   /** overall load, percent 0-100 */
   load: number;
@@ -61,6 +80,35 @@ export interface CpuMetrics {
   freqGhz: number | null;
   /** 1 / 5 / 15 min load averages */
   loadAvg: [number, number, number];
+  /** time split over the last interval, null on hosts without /proc/stat */
+  breakdown: CpuBreakdown | null;
+  /** processes ready to run right now — above the core count, they queue */
+  runQueue: number | null;
+  /** processes stuck in uninterruptible sleep, i.e. waiting on I/O */
+  blocked: number | null;
+  /** context switches per second across the host */
+  ctxSwitchesSec: number | null;
+}
+
+/**
+ * What the headline "used" figure leaves out. Bytes, except the two swap
+ * rates: `swapUsed` says how much sits in swap, these say whether the
+ * machine is actively thrashing through it — the difference between a Pi
+ * that once swapped and a Pi that is dying right now.
+ */
+export interface MemoryDetail {
+  /** page cache plus reclaimable slab */
+  cached: number;
+  buffers: number;
+  /** written-to pages still owed to the disk */
+  dirty: number;
+  writeback: number;
+  shared: number;
+  /** bytes per second in and out of swap, null until a second sample */
+  swapInSec: number | null;
+  swapOutSec: number | null;
+  /** processes the kernel killed to reclaim memory, since boot */
+  oomKills: number | null;
 }
 
 export interface MemoryMetrics {
@@ -70,6 +118,8 @@ export interface MemoryMetrics {
   available: number;
   swapTotal: number;
   swapUsed: number;
+  /** null on hosts without /proc/meminfo */
+  detail: MemoryDetail | null;
 }
 
 export interface TemperatureSensor {
@@ -156,6 +206,27 @@ export interface EnergyMetrics {
   currency: string;
 }
 
+/**
+ * One PSI window: the share of the last 10 / 60 / 300 seconds during which
+ * at least one task was stalled waiting for the resource.
+ */
+export interface PressureStall {
+  avg10: number;
+  avg60: number;
+  avg300: number;
+}
+
+/**
+ * Kernel pressure stall information — the closest thing Linux has to a
+ * straight answer to "why does this feel slow". Null when the kernel wasn't
+ * built with PSI, or per-resource null when that file is missing.
+ */
+export interface PressureMetrics {
+  cpu: PressureStall | null;
+  io: PressureStall | null;
+  memory: PressureStall | null;
+}
+
 export interface FilesystemMetrics {
   mount: string;
   /** "ext4", "vfat"… */
@@ -163,12 +234,42 @@ export interface FilesystemMetrics {
   /** bytes */
   total: number;
   used: number;
+  /** inode counts — a card can run out of these with space to spare */
+  inodesTotal: number;
+  inodesUsed: number;
+  /**
+   * Mounted read-only. On a Pi this is rarely a choice: a failing SD card is
+   * remounted ro by the kernel and everything keeps "working" for hours.
+   * Null when the host's mount table isn't readable from here.
+   */
+  readOnly: boolean | null;
+}
+
+/** per-device throughput and service quality, from /proc/diskstats */
+export interface DiskDeviceIo {
+  /** kernel name, e.g. "mmcblk0", "nvme0n1" */
+  name: string;
+  /** bytes per second */
+  readSec: number;
+  writeSec: number;
+  /** completed operations per second */
+  iops: number;
+  /** mean time an operation took to complete, ms — null with no operations */
+  awaitMs: number | null;
+  /** share of the interval the device had a request in flight, percent */
+  utilPercent: number;
 }
 
 export interface DiskIoMetrics {
   /** bytes per second across every block device */
   readSec: number;
   writeSec: number;
+  /** operations per second across every block device */
+  iops: number;
+  /** latency and busy share of the *busiest* device — the one that bottlenecks */
+  awaitMs: number | null;
+  utilPercent: number;
+  devices: DiskDeviceIo[];
 }
 
 export interface DiskMetrics {
@@ -176,6 +277,11 @@ export interface DiskMetrics {
   /** bytes */
   total: number;
   used: number;
+  /** inodes on the primary mount */
+  inodesTotal: number;
+  inodesUsed: number;
+  /** primary mount remounted read-only — see FilesystemMetrics.readOnly */
+  readOnly: boolean | null;
   /** every mounted real filesystem, the primary one included */
   filesystems: FilesystemMetrics[];
   /** whole-host block throughput, null when /proc/diskstats is unreadable */
@@ -190,6 +296,29 @@ export interface InterfaceMetrics {
   /** cumulative counters since boot, bytes */
   rxBytes: number;
   txBytes: number;
+  /** packets per second — what matters on a Pi serving DNS, not bytes */
+  rxPacketsSec: number;
+  txPacketsSec: number;
+  /** cumulative error and dropped-packet counts since boot, both directions */
+  errors: number;
+  drops: number;
+  /**
+   * Negotiated link speed in Mb/s and duplex mode. A gigabit Pi sitting at
+   * 100 Mb/s is a cable or a switch port, and nothing else on the dashboard
+   * would say so. Null on interfaces that don't negotiate (Wi-Fi, virtual).
+   */
+  speedMbps: number | null;
+  duplex: string | null;
+}
+
+/**
+ * Host-wide TCP health from /proc/net/snmp. Retransmissions climb before
+ * throughput visibly drops, which makes them the earlier warning.
+ */
+export interface TcpMetrics {
+  established: number;
+  /** retransmitted segments per second, null until a second sample */
+  retransSegsSec: number | null;
 }
 
 export interface WifiMetrics {
@@ -210,6 +339,8 @@ export interface NetworkMetrics {
   interfaces: InterfaceMetrics[];
   /** link state of the wireless interface, null on wired-only hosts */
   wifi: WifiMetrics | null;
+  /** null on hosts without /proc/net/snmp */
+  tcp: TcpMetrics | null;
 }
 
 export interface MetricsSnapshot {
@@ -223,6 +354,8 @@ export interface MetricsSnapshot {
   fan: FanMetrics;
   disk: DiskMetrics;
   network: NetworkMetrics;
+  /** null on kernels built without pressure stall information */
+  pressure: PressureMetrics | null;
   /** null on hardware that doesn't expose the firmware throttle register */
   throttle: ThrottleMetrics | null;
   /** null when the board neither measures nor models its draw */
@@ -249,6 +382,10 @@ export interface HistoryPoint {
   netTx: number | null;
   fanRpm: number | null;
   power: number | null;
+  /** share of the bucket the CPU spent waiting on I/O, percent */
+  cpuIowait: number | null;
+  /** PSI: share of the bucket with at least one task stalled on I/O, percent */
+  ioPressure: number | null;
 }
 
 export interface HistorySeries {

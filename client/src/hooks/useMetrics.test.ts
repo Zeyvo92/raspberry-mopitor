@@ -238,6 +238,8 @@ describe("useMetrics history", () => {
     netTx: null,
     fanRpm: null,
     power: null,
+    cpuIowait: null,
+    ioPressure: null,
   });
 
   const snapshot = (ts: number, load: number) => ({

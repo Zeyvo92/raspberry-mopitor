@@ -51,7 +51,9 @@ const SCHEMA = `
     net_rx     REAL    NOT NULL,
     net_tx     REAL    NOT NULL,
     fan_rpm    INTEGER,
-    power      REAL
+    power      REAL,
+    cpu_iowait REAL,
+    io_pressure REAL
   );
 
   CREATE TABLE IF NOT EXISTS energy (
@@ -72,6 +74,16 @@ const MIGRATIONS: { table: string; column: string; ddl: string }[] = [
     column: "power",
     ddl: "ALTER TABLE samples ADD COLUMN power REAL",
   },
+  {
+    table: "samples",
+    column: "cpu_iowait",
+    ddl: "ALTER TABLE samples ADD COLUMN cpu_iowait REAL",
+  },
+  {
+    table: "samples",
+    column: "io_pressure",
+    ddl: "ALTER TABLE samples ADD COLUMN io_pressure REAL",
+  },
 ];
 
 function migrate(db: DatabaseSync): void {
@@ -87,8 +99,9 @@ function migrate(db: DatabaseSync): void {
 const INSERT = `
   INSERT OR REPLACE INTO samples
     (ts, cpu, cpu_temp, mem_used, mem_total, swap_used,
-     disk_used, disk_total, net_rx, net_tx, fan_rpm, power)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+     disk_used, disk_total, net_rx, net_tx, fan_rpm, power,
+     cpu_iowait, io_pressure)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 `;
 
 const UPSERT_ENERGY = `
@@ -112,7 +125,9 @@ const SELECT = `
          AVG(net_rx)    AS net_rx,
          AVG(net_tx)    AS net_tx,
          AVG(fan_rpm)   AS fan_rpm,
-         AVG(power)     AS power
+         AVG(power)     AS power,
+         AVG(cpu_iowait)  AS cpu_iowait,
+         AVG(io_pressure) AS io_pressure
   FROM samples
   WHERE ts >= ?
   GROUP BY bucket_ts
@@ -196,6 +211,10 @@ export async function openHistoryStore(
           snapshot.network.txSec,
           snapshot.fan.rpm,
           snapshot.power?.watts ?? null,
+          // the two series that answer "why was it slow at 3am" — the live
+          // cards show them, but the answer is always after the fact
+          snapshot.cpu.breakdown?.iowait ?? null,
+          snapshot.pressure?.io?.avg10 ?? null,
         );
         writeFailed = false;
       } catch (err) {
@@ -227,6 +246,8 @@ export async function openHistoryStore(
             netTx: round(num(row["net_tx"]), 0),
             fanRpm: round(num(row["fan_rpm"]), 0),
             power: round(num(row["power"]), 2),
+            cpuIowait: round(num(row["cpu_iowait"])),
+            ioPressure: round(num(row["io_pressure"])),
           });
         }
       } catch (err) {
@@ -305,5 +326,7 @@ function emptyPoint(ts: number): HistoryPoint {
     netTx: null,
     fanRpm: null,
     power: null,
+    cpuIowait: null,
+    ioPressure: null,
   };
 }

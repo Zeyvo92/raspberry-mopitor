@@ -232,8 +232,24 @@ describe("App tabs", () => {
           disk: {
             ...SNAPSHOT.disk,
             filesystems: [
-              { mount: "/", type: "ext4", total: 100, used: 50 },
-              { mount: "/boot/firmware", type: "vfat", total: 100, used: 10 },
+              {
+                mount: "/",
+                type: "ext4",
+                total: 100,
+                used: 50,
+                inodesTotal: 0,
+                inodesUsed: 0,
+                readOnly: false,
+              },
+              {
+                mount: "/boot/firmware",
+                type: "vfat",
+                total: 100,
+                used: 10,
+                inodesTotal: 0,
+                inodesUsed: 0,
+                readOnly: false,
+              },
             ],
           },
         },
@@ -295,5 +311,46 @@ describe("App tabs", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Leave kiosk mode" }));
     expect(screen.getByRole("tablist")).toBeInTheDocument();
+  });
+});
+
+describe("App display settings", () => {
+  const pressure = {
+    cpu: { avg10: 1, avg60: 1, avg300: 1 },
+    io: null,
+    memory: null,
+  };
+
+  it("draws the pressure card on a kernel that reports PSI", () => {
+    mockedUseMetrics.mockReturnValue(live({ metrics: { ...SNAPSHOT, pressure } }));
+    renderWithI18n(<App />);
+    expect(
+      screen.getByRole("heading", { name: "Pressure (PSI)" }),
+    ).toBeInTheDocument();
+  });
+
+  it("leaves out a card the reader has hidden", async () => {
+    const user = userEvent.setup();
+    mockedUseMetrics.mockReturnValue(live());
+    renderWithI18n(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Display" }));
+    await user.click(screen.getByRole("checkbox", { name: "Network" }));
+    expect(screen.queryByRole("heading", { name: "Network (eth0)" })).toBeNull();
+    // the others are untouched
+    expect(screen.getByRole("heading", { name: "CPU" })).toBeInTheDocument();
+  });
+
+  it("explains an empty dashboard rather than showing nothing", () => {
+    localStorage.setItem(
+      "mopitor.display",
+      JSON.stringify({
+        hidden: ["cpu", "memory", "temperature", "disk", "network"],
+        advanced: false,
+      }),
+    );
+    mockedUseMetrics.mockReturnValue(live());
+    renderWithI18n(<App />);
+    expect(screen.getByText(/Every card is hidden/)).toBeInTheDocument();
   });
 });

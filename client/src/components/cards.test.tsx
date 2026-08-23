@@ -1,6 +1,6 @@
 import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { renderWithI18n as render } from "../test-utils";
+import { enableDetails, renderWithI18n as render } from "../test-utils";
 import { Bar, BigValue, Card, levelColor } from "./Card";
 import { CpuCard } from "./CpuCard";
 import { DiskCard } from "./DiskCard";
@@ -43,7 +43,15 @@ describe("Card primitives", () => {
 });
 
 describe("CpuCard", () => {
-  const base = { load: 12.3, perCore: [10, 20], loadAvg: [1, 2, 3] as [number, number, number] };
+  const base = {
+    load: 12.3,
+    perCore: [10, 20],
+    loadAvg: [1, 2, 3] as [number, number, number],
+    breakdown: null,
+    runQueue: null,
+    blocked: null,
+    ctxSwitchesSec: null,
+  };
 
   it("shows global load, per-core bars and frequency", () => {
     render(<CpuCard cpu={{ ...base, freqGhz: 1.8 }} />);
@@ -65,7 +73,14 @@ describe("MemoryCard", () => {
   it("shows usage and hides swap when absent", () => {
     render(
       <MemoryCard
-        memory={{ total: 8 * gib, used: 2 * gib, available: 6 * gib, swapTotal: 0, swapUsed: 0 }}
+        memory={{
+          total: 8 * gib,
+          used: 2 * gib,
+          available: 6 * gib,
+          swapTotal: 0,
+          swapUsed: 0,
+          detail: null,
+        }}
       />,
     );
     expect(screen.getByText("2.0 GB")).toBeInTheDocument();
@@ -75,7 +90,14 @@ describe("MemoryCard", () => {
   it("shows the swap bar when swap exists", () => {
     render(
       <MemoryCard
-        memory={{ total: 8 * gib, used: 2 * gib, available: 6 * gib, swapTotal: gib, swapUsed: gib / 2 }}
+        memory={{
+          total: 8 * gib,
+          used: 2 * gib,
+          available: 6 * gib,
+          swapTotal: gib,
+          swapUsed: gib / 2,
+          detail: null,
+        }}
       />,
     );
     expect(screen.getByText("swap")).toBeInTheDocument();
@@ -118,6 +140,9 @@ describe("DiskCard", () => {
     mount: "/host",
     total: 100 * gib,
     used: 30 * gib,
+    inodesTotal: 0,
+    inodesUsed: 0,
+    readOnly: false,
     filesystems: [],
     io: null,
   };
@@ -131,7 +156,21 @@ describe("DiskCard", () => {
   });
 
   it("adds throughput when the host reports it", () => {
-    render(<DiskCard disk={{ ...disk, io: { readSec: 2048, writeSec: 4096 } }} />);
+    render(
+      <DiskCard
+        disk={{
+          ...disk,
+          io: {
+            readSec: 2048,
+            writeSec: 4096,
+            iops: 0,
+            awaitMs: null,
+            utilPercent: 0,
+            devices: [],
+          },
+        }}
+      />,
+    );
     expect(screen.getByText("read")).toBeInTheDocument();
     expect(screen.getByText(/2\.0 KB\/s/)).toBeInTheDocument();
     expect(screen.getByText(/4\.0 KB\/s/)).toBeInTheDocument();
@@ -144,8 +183,24 @@ describe("FilesystemsCard", () => {
     render(
       <FilesystemsCard
         filesystems={[
-          { mount: "/", type: "ext4", total: 100 * gib, used: 50 * gib },
-          { mount: "/boot/firmware", type: "vfat", total: 512 * 1024 ** 2, used: 128 * 1024 ** 2 },
+          {
+            mount: "/",
+            type: "ext4",
+            total: 100 * gib,
+            used: 50 * gib,
+            inodesTotal: 0,
+            inodesUsed: 0,
+            readOnly: false,
+          },
+          {
+            mount: "/boot/firmware",
+            type: "vfat",
+            total: 512 * 1024 ** 2,
+            used: 128 * 1024 ** 2,
+            inodesTotal: 0,
+            inodesUsed: 0,
+            readOnly: false,
+          },
         ]}
       />,
     );
@@ -158,12 +213,28 @@ describe("FilesystemsCard", () => {
 });
 
 describe("NetworkCard", () => {
+  /** an interface reporting nothing beyond its throughput */
+  const LINK = {
+    iface: "eth0",
+    rxSec: 0,
+    txSec: 0,
+    rxBytes: 10,
+    txBytes: 5,
+    rxPacketsSec: 0,
+    txPacketsSec: 0,
+    errors: 0,
+    drops: 0,
+    speedMbps: null,
+    duplex: null,
+  };
+
   const network = {
     iface: "eth0",
     rxSec: 2048,
     txSec: 1024,
     interfaces: [],
     wifi: null,
+    tcp: null,
   };
 
   it("shows both directions with the interface name", () => {
@@ -180,8 +251,8 @@ describe("NetworkCard", () => {
         network={{
           ...network,
           interfaces: [
-            { iface: "eth0", rxSec: 2048, txSec: 1024, rxBytes: 10, txBytes: 5 },
-            { iface: "wlan0", rxSec: 512, txSec: 256, rxBytes: 4, txBytes: 2 },
+            { ...LINK, iface: "eth0", rxSec: 2048, txSec: 1024 },
+            { ...LINK, iface: "wlan0", rxSec: 512, txSec: 256 },
           ],
         }}
       />,
@@ -319,5 +390,280 @@ describe("PowerCard", () => {
   it("keeps big totals readable", () => {
     render(<PowerCard power={null} energy={{ ...energy, totalKwh: 1234.5 }} />);
     expect(screen.getByText("1235 kWh")).toBeInTheDocument();
+  });
+});
+
+describe("detailed rows", () => {
+  const gib = 1024 ** 3;
+
+  describe("CpuCard", () => {
+    const cpu = {
+      load: 50,
+      perCore: [50],
+      freqGhz: null,
+      loadAvg: [1, 1, 1] as [number, number, number],
+      breakdown: { user: 20.5, system: 5, iowait: 24, irq: 0.5, steal: 0 },
+      runQueue: 4,
+      blocked: 2,
+      ctxSwitchesSec: 1500,
+    };
+
+    it("keeps the split out of the way until it is asked for", () => {
+      render(<CpuCard cpu={cpu} />);
+      expect(screen.queryByText("iowait")).toBeNull();
+    });
+
+    it("splits the time and names what the scheduler is holding", () => {
+      enableDetails();
+      render(<CpuCard cpu={cpu} />);
+      expect(screen.getByText("iowait")).toBeInTheDocument();
+      expect(screen.getByText("24.0%")).toBeInTheDocument();
+      // bare metal never has stolen time: a row of zeros helps nobody
+      expect(screen.queryByText("steal")).toBeNull();
+      expect(
+        screen.getByText("4 runnable · 2 blocked on I/O · 1,500 ctx/s"),
+      ).toBeInTheDocument();
+    });
+
+    it("shows stolen time when there is any", () => {
+      enableDetails();
+      render(<CpuCard cpu={{ ...cpu, breakdown: { ...cpu.breakdown, steal: 3 } }} />);
+      expect(screen.getByText("steal")).toBeInTheDocument();
+    });
+
+    it("says nothing it cannot read", () => {
+      enableDetails();
+      render(
+        <CpuCard
+          cpu={{ ...cpu, breakdown: null, blocked: 0, ctxSwitchesSec: null }}
+        />,
+      );
+      expect(screen.queryByText("iowait")).toBeNull();
+      expect(screen.getByText("4 runnable")).toBeInTheDocument();
+    });
+
+    it("shows nothing at all on a host without /proc/stat", () => {
+      enableDetails();
+      render(
+        <CpuCard
+          cpu={{ ...cpu, breakdown: null, runQueue: null, blocked: null, ctxSwitchesSec: null }}
+        />,
+      );
+      expect(screen.queryByText(/runnable/)).toBeNull();
+    });
+  });
+
+  describe("MemoryCard", () => {
+    const memory = {
+      total: 8 * gib,
+      used: 2 * gib,
+      available: 6 * gib,
+      swapTotal: gib,
+      swapUsed: 0,
+      detail: {
+        cached: gib,
+        buffers: 64 * 1024 ** 2,
+        dirty: 1024 ** 2,
+        writeback: 0,
+        shared: 4 * 1024 ** 2,
+        swapInSec: 2048,
+        swapOutSec: 4096,
+        oomKills: 0,
+      },
+    };
+
+    it("names the cache and the swap traffic once details are on", () => {
+      enableDetails();
+      render(<MemoryCard memory={memory} />);
+      expect(screen.getByText("cache")).toBeInTheDocument();
+      expect(screen.getByText("swap ↓ 2.0 KB/s ↑ 4.0 KB/s")).toBeInTheDocument();
+    });
+
+    it("keeps quiet without them, and when there is no swap traffic to show", () => {
+      render(<MemoryCard memory={memory} />);
+      expect(screen.queryByText("cache")).toBeNull();
+
+      enableDetails();
+      const { unmount } = render(
+        <MemoryCard
+          memory={{ ...memory, detail: { ...memory.detail, swapInSec: null } }}
+        />,
+      );
+      expect(screen.queryByText(/swap ↓/)).toBeNull();
+      unmount();
+
+      // a machine with no swap at all has nothing to say about swapping
+      render(<MemoryCard memory={{ ...memory, swapTotal: 0 }} />);
+      expect(screen.queryByText(/swap ↓/)).toBeNull();
+    });
+
+    it("reports processes killed out of memory whatever the settings", () => {
+      render(
+        <MemoryCard memory={{ ...memory, detail: { ...memory.detail, oomKills: 3 } }} />,
+      );
+      expect(screen.getByText(/3 process\(es\) killed out of memory/)).toBeInTheDocument();
+    });
+
+    it("has nothing to add on a host with no /proc/meminfo", () => {
+      enableDetails();
+      render(<MemoryCard memory={{ ...memory, detail: null }} />);
+      expect(screen.queryByText("cache")).toBeNull();
+    });
+  });
+
+  describe("DiskCard", () => {
+    const disk = {
+      mount: "/",
+      total: 100 * gib,
+      used: 30 * gib,
+      inodesTotal: 1000,
+      inodesUsed: 250,
+      readOnly: false,
+      filesystems: [],
+      io: {
+        readSec: 0,
+        writeSec: 0,
+        iops: 42,
+        awaitMs: 8.5,
+        utilPercent: 65,
+        devices: [],
+      },
+    };
+
+    it("adds latency, busy share and inodes to the detailed rows", () => {
+      enableDetails();
+      render(<DiskCard disk={disk} />);
+      expect(screen.getByText("latency")).toBeInTheDocument();
+      expect(screen.getByText("8.5 ms")).toBeInTheDocument();
+      expect(screen.getByText("65%")).toBeInTheDocument();
+      expect(screen.getByText("25%")).toBeInTheDocument(); // inodes
+    });
+
+    it("skips what the device doesn't report", () => {
+      enableDetails();
+      render(
+        <DiskCard
+          disk={{ ...disk, inodesTotal: 0, io: { ...disk.io, awaitMs: null } }}
+        />,
+      );
+      expect(screen.queryByText("latency")).toBeNull();
+      expect(screen.queryByText("inodes")).toBeNull();
+      expect(screen.getByText("busy")).toBeInTheDocument();
+    });
+
+    it("has nothing to add without /proc/diskstats", () => {
+      enableDetails();
+      render(<DiskCard disk={{ ...disk, io: null, inodesTotal: 0 }} />);
+      expect(screen.queryByText("busy")).toBeNull();
+    });
+
+    it("warns about a read-only mount whatever the settings", () => {
+      render(<DiskCard disk={{ ...disk, readOnly: true }} />);
+      expect(screen.getByText("⚠ mounted read-only")).toBeInTheDocument();
+    });
+
+    it("says nothing when the mount table is out of reach", () => {
+      render(<DiskCard disk={{ ...disk, readOnly: null }} />);
+      expect(screen.queryByText(/read-only/)).toBeNull();
+    });
+  });
+
+  describe("FilesystemsCard", () => {
+    const filesystems = [
+      {
+        mount: "/",
+        type: "ext4",
+        total: 100 * gib,
+        used: 50 * gib,
+        inodesTotal: 1000,
+        inodesUsed: 100,
+        readOnly: false,
+      },
+      {
+        mount: "/boot",
+        type: "vfat",
+        total: gib,
+        used: gib / 2,
+        inodesTotal: 0,
+        inodesUsed: 0,
+        readOnly: true,
+      },
+    ];
+
+    it("flags a read-only mount and hides inodes until they are asked for", () => {
+      render(<FilesystemsCard filesystems={filesystems} />);
+      expect(screen.getByText("⚠ mounted read-only")).toBeInTheDocument();
+      expect(screen.queryByText(/inodes/)).toBeNull();
+    });
+
+    it("adds inodes for the filesystems that have any", () => {
+      enableDetails();
+      render(<FilesystemsCard filesystems={filesystems} />);
+      // vfat has no inode table, so only the ext4 row gets a figure
+      expect(screen.getAllByText(/% inodes/)).toHaveLength(1);
+      expect(screen.getByText("10% inodes")).toBeInTheDocument();
+    });
+  });
+
+  describe("NetworkCard", () => {
+    const eth0 = {
+      iface: "eth0",
+      rxSec: 0,
+      txSec: 0,
+      rxBytes: 100,
+      txBytes: 50,
+      rxPacketsSec: 1200,
+      txPacketsSec: 800,
+      errors: 2,
+      drops: 7,
+      speedMbps: 1000,
+      duplex: "full",
+    };
+    const network = {
+      iface: "eth0",
+      rxSec: 0,
+      txSec: 0,
+      interfaces: [eth0],
+      wifi: null,
+      tcp: { established: 12, retransSegsSec: 0.5 },
+    };
+
+    it("adds packet rates, errors, the link and TCP health", () => {
+      enableDetails();
+      render(<NetworkCard network={network} />);
+      expect(screen.getByText("1,200 / 800 pkt/s")).toBeInTheDocument();
+      expect(screen.getByText("2 errors · 7 drops")).toBeInTheDocument();
+      expect(screen.getByText("1000 Mb/s full")).toBeInTheDocument();
+      expect(screen.getByText("12 TCP established · 0.5 retrans/s")).toBeInTheDocument();
+    });
+
+    it("leaves out a link that doesn't negotiate and a counter with no rate yet", () => {
+      enableDetails();
+      render(
+        <NetworkCard
+          network={{
+            ...network,
+            interfaces: [{ ...eth0, speedMbps: null }],
+            tcp: { established: 3, retransSegsSec: null },
+          }}
+        />,
+      );
+      expect(screen.queryByText(/Mb\/s/)).toBeNull();
+      expect(screen.queryByText(/TCP established/)).toBeNull();
+    });
+
+    it("names the speed without a duplex the driver never reported", () => {
+      enableDetails();
+      render(
+        <NetworkCard network={{ ...network, interfaces: [{ ...eth0, duplex: null }] }} />,
+      );
+      expect(screen.getByText("1000 Mb/s")).toBeInTheDocument();
+    });
+
+    it("adds nothing when there is nothing to add", () => {
+      enableDetails();
+      render(<NetworkCard network={{ ...network, interfaces: [], tcp: null }} />);
+      expect(screen.queryByText(/pkt\/s/)).toBeNull();
+    });
   });
 });
