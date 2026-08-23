@@ -1,12 +1,15 @@
 import { CHART_COLORS } from "../charts/theme";
 import { formatRate } from "../format";
 import { useI18n } from "../i18n";
-import type { NetworkMetrics, WifiMetrics } from "../types";
+import { useDisplay } from "../settings";
+import type { InterfaceMetrics, NetworkMetrics, TcpMetrics, WifiMetrics } from "../types";
 import { Card } from "./Card";
 
 export function NetworkCard({ network }: { network: NetworkMetrics }) {
   const { t } = useI18n();
+  const { advanced } = useDisplay();
   const others = network.interfaces.filter((entry) => entry.iface !== network.iface);
+  const primary = network.interfaces.find((entry) => entry.iface === network.iface);
 
   return (
     <Card title={t("network.title", { iface: network.iface })}>
@@ -27,6 +30,8 @@ export function NetworkCard({ network }: { network: NetworkMetrics }) {
 
       {network.wifi && <WifiLink wifi={network.wifi} />}
 
+      {advanced && <Quality primary={primary} tcp={network.tcp} />}
+
       {others.length > 0 && (
         <div className="mt-3 border-t border-line pt-2">
           <p className="mb-1 text-xs text-ink-faint">{t("network.interfaces")}</p>
@@ -46,6 +51,53 @@ export function NetworkCard({ network }: { network: NetworkMetrics }) {
         </div>
       )}
     </Card>
+  );
+}
+
+/**
+ * Whether the link is healthy, as opposed to how much it is carrying: packet
+ * rate (what a Pi serving DNS actually does), errors and drops, the speed the
+ * link negotiated — a gigabit port stuck at 100 Mb/s is a cable, not a
+ * workload — and how much TCP the kernel is having to send twice.
+ */
+function Quality({
+  primary,
+  tcp,
+}: {
+  primary: InterfaceMetrics | undefined;
+  tcp: TcpMetrics | null;
+}) {
+  const { t } = useI18n();
+  const lines = [
+    primary &&
+      t("network.packets", {
+        rx: primary.rxPacketsSec.toLocaleString(),
+        tx: primary.txPacketsSec.toLocaleString(),
+      }),
+    primary && t("network.errors", { errors: primary.errors, drops: primary.drops }),
+    primary &&
+      primary.speedMbps !== null &&
+      t("network.link", {
+        speed: primary.speedMbps,
+        duplex: primary.duplex ?? "",
+      }).trim(),
+    tcp !== null &&
+      tcp.retransSegsSec !== null &&
+      t("network.tcp", {
+        established: tcp.established,
+        retrans: tcp.retransSegsSec,
+      }),
+  ].filter((line): line is string => typeof line === "string");
+
+  if (lines.length === 0) return null;
+  return (
+    <div className="mt-3 border-t border-line pt-2">
+      {lines.map((line) => (
+        <p key={line} className="font-mono text-xs text-ink-ghost">
+          {line}
+        </p>
+      ))}
+    </div>
   );
 }
 

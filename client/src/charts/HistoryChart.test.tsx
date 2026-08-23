@@ -32,6 +32,8 @@ const point = (ts: number, cpu: number | null): HistoryPoint => ({
   netTx: cpu,
   fanRpm: null,
   power: null,
+  cpuIowait: null,
+  ioPressure: null,
 });
 
 const points = [point(0, 10), point(10_000, null), point(20_000, 50)];

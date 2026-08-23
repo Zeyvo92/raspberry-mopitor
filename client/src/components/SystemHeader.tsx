@@ -1,6 +1,8 @@
 import { formatUptime } from "../format";
 import { useI18n } from "../i18n";
+import type { CardId } from "../settings";
 import type { ConfigInfo, StaticInfo, StorageHealth } from "../types";
+import { DisplaySettings } from "./DisplaySettings";
 import { LanguageSelect } from "./LanguageSelect";
 import { RefreshControl } from "./RefreshControl";
 import { ThemeSelect } from "./ThemeSelect";
@@ -11,6 +13,7 @@ export function SystemHeader({
   uptime,
   connected,
   kiosk,
+  cards,
   onChangeInterval,
   onToggleKiosk,
 }: {
@@ -19,6 +22,8 @@ export function SystemHeader({
   uptime: number | null;
   connected: boolean;
   kiosk: boolean;
+  /** cards this machine can fill — what the display settings may hide */
+  cards: readonly CardId[];
   onChangeInterval: (intervalMs: number) => void;
   onToggleKiosk: () => void;
 }) {
@@ -44,6 +49,12 @@ export function SystemHeader({
             aria-label={status}
             title={status}
           />
+          {info?.storage?.preEol === "warning" && !kiosk && (
+            <WearBadge tone="warn" label={t("header.preEol.warning")} />
+          )}
+          {info?.storage?.preEol === "urgent" && !kiosk && (
+            <WearBadge tone="danger" label={t("header.preEol.urgent")} />
+          )}
           {newRelease && !kiosk && (
             <a
               href={newRelease.url ?? "#"}
@@ -71,6 +82,7 @@ export function SystemHeader({
         {!kiosk && config && (
           <RefreshControl config={config} onChange={onChangeInterval} />
         )}
+        {!kiosk && cards.length > 0 && <DisplaySettings available={cards} />}
         {!kiosk && <ThemeSelect />}
         {!kiosk && <LanguageSelect />}
         <button
@@ -104,4 +116,24 @@ function storageNote(
   return storage?.lifeUsedPercent === null || storage?.lifeUsedPercent === undefined
     ? ` · ${t("header.storagePlain", { name })}`
     : ` · ${t("header.storage", { name, percent: storage.lifeUsedPercent })}`;
+}
+
+/**
+ * The card controller's own end-of-life verdict. It is coarser than the wear
+ * percentage next to the model name, but it is the one a card fills in when
+ * it has decided it is running out — worth a badge rather than a footnote.
+ */
+function WearBadge({ tone, label }: { tone: "warn" | "danger"; label: string }) {
+  const palette =
+    tone === "danger"
+      ? "border-red-500/40 bg-red-500/10 text-red-400"
+      : "border-amber-500/40 bg-amber-500/10 text-amber-400";
+  return (
+    <span
+      role="status"
+      className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${palette}`}
+    >
+      {label}
+    </span>
+  );
 }

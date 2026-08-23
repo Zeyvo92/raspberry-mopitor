@@ -22,7 +22,7 @@ const info: StaticInfo = {
   cores: 4,
   governor: "ondemand",
   cpuMaxGhz: 2.4,
-  storage: { device: "mmcblk0", name: "SC32G", lifeUsedPercent: 20 },
+  storage: { device: "mmcblk0", name: "SC32G", lifeUsedPercent: 20, preEol: "normal" },
 };
 
 const config = CONFIG;
@@ -36,6 +36,7 @@ describe("SystemHeader", () => {
         uptime={null}
         connected={false}
         kiosk={false}
+        cards={[]}
         onChangeInterval={() => {}}
         onToggleKiosk={() => {}}
       />,
@@ -57,6 +58,7 @@ describe("SystemHeader", () => {
         uptime={90061}
         connected={true}
         kiosk={false}
+        cards={[]}
         onChangeInterval={() => {}}
         onToggleKiosk={() => {}}
       />,
@@ -88,6 +90,7 @@ describe("SystemHeader", () => {
         uptime={null}
         connected={true}
         kiosk={false}
+        cards={[]}
         onChangeInterval={() => {}}
         onToggleKiosk={() => {}}
       />,
@@ -112,6 +115,7 @@ describe("SystemHeader", () => {
         uptime={null}
         connected={true}
         kiosk={false}
+        cards={[]}
         onChangeInterval={() => {}}
         onToggleKiosk={() => {}}
       />,
@@ -128,6 +132,7 @@ describe("SystemHeader", () => {
         uptime={null}
         connected={true}
         kiosk={false}
+        cards={[]}
         onChangeInterval={onChangeInterval}
         onToggleKiosk={() => {}}
       />,
@@ -150,6 +155,7 @@ describe("SystemHeader update badge", () => {
         uptime={null}
         connected={true}
         kiosk={false}
+        cards={[]}
         onChangeInterval={() => {}}
         onToggleKiosk={() => {}}
       />,
@@ -165,6 +171,7 @@ describe("SystemHeader update badge", () => {
         uptime={null}
         connected={true}
         kiosk={false}
+        cards={[]}
         onChangeInterval={() => {}}
         onToggleKiosk={() => {}}
       />,
@@ -179,12 +186,18 @@ describe("SystemHeader update badge", () => {
       <SystemHeader
         info={{
           ...info,
-          storage: { device: "nvme0n1", name: null, lifeUsedPercent: null },
+          storage: {
+            device: "nvme0n1",
+            name: null,
+            lifeUsedPercent: null,
+            preEol: null,
+          },
         }}
         config={config}
         uptime={null}
         connected={true}
         kiosk={false}
+        cards={[]}
         onChangeInterval={() => {}}
         onToggleKiosk={() => {}}
       />,
@@ -199,6 +212,7 @@ describe("SystemHeader update badge", () => {
         uptime={null}
         connected={true}
         kiosk={false}
+        cards={[]}
         onChangeInterval={() => {}}
         onToggleKiosk={() => {}}
       />,
@@ -215,6 +229,7 @@ describe("SystemHeader update badge", () => {
         uptime={null}
         connected={true}
         kiosk={false}
+        cards={[]}
         onChangeInterval={() => {}}
         onToggleKiosk={onToggleKiosk}
       />,
@@ -240,6 +255,7 @@ describe("SystemHeader update badge", () => {
         uptime={3600}
         connected={true}
         kiosk={true}
+        cards={[]}
         onChangeInterval={() => {}}
         onToggleKiosk={() => {}}
       />,
@@ -253,5 +269,58 @@ describe("SystemHeader update badge", () => {
     // the hostname, the connection dot and the uptime survive
     expect(screen.getByText("raspberry")).toBeInTheDocument();
     expect(screen.getByText("1h 0m")).toBeInTheDocument();
+  });
+});
+
+describe("SystemHeader display settings", () => {
+  const props = {
+    config,
+    uptime: null,
+    connected: true,
+    onChangeInterval: () => {},
+    onToggleKiosk: () => {},
+  };
+
+  it("offers the ⚙ menu once the machine has said what it can show", () => {
+    const { rerender } = render(
+      <SystemHeader info={info} kiosk={false} cards={[]} {...props} />,
+    );
+    // nothing has arrived yet: there is nothing to configure
+    expect(screen.queryByRole("button", { name: "Display" })).toBeNull();
+
+    rerender(<SystemHeader info={info} kiosk={false} cards={["cpu"]} {...props} />);
+    expect(screen.getByRole("button", { name: "Display" })).toBeInTheDocument();
+  });
+
+  it("drops the menu in kiosk mode, like every other control", () => {
+    render(<SystemHeader info={info} kiosk cards={["cpu"]} {...props} />);
+    expect(screen.queryByRole("button", { name: "Display" })).toBeNull();
+  });
+
+  it("badges a card the controller says is wearing out", () => {
+    const { rerender } = render(
+      <SystemHeader
+        info={{ ...info, storage: { ...info.storage!, preEol: "warning" } }}
+        kiosk={false}
+        cards={[]}
+        {...props}
+      />,
+    );
+    expect(screen.getByText("⚠ card wear warning")).toBeInTheDocument();
+
+    rerender(
+      <SystemHeader
+        info={{ ...info, storage: { ...info.storage!, preEol: "urgent" } }}
+        kiosk={false}
+        cards={[]}
+        {...props}
+      />,
+    );
+    expect(screen.getByText("⚠ card at end of life")).toBeInTheDocument();
+  });
+
+  it("says nothing about a healthy card", () => {
+    render(<SystemHeader info={info} kiosk={false} cards={[]} {...props} />);
+    expect(screen.queryByText(/card wear/)).toBeNull();
   });
 });

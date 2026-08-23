@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { Fragment, lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { CpuCard } from "./components/CpuCard";
 import { ContainerTable } from "./components/ContainerTable";
 import { DiskCard } from "./components/DiskCard";
@@ -7,6 +7,7 @@ import { FilesystemsCard } from "./components/FilesystemsCard";
 import { MemoryCard } from "./components/MemoryCard";
 import { NetworkCard } from "./components/NetworkCard";
 import { PowerCard } from "./components/PowerCard";
+import { PressureCard } from "./components/PressureCard";
 import { ProcessTable } from "./components/ProcessTable";
 import { DEFAULT_RANGE_MS } from "./components/ranges";
 import { SystemHeader } from "./components/SystemHeader";
@@ -17,7 +18,8 @@ import { ThrottleCard } from "./components/ThrottleCard";
 import { useMetrics } from "./hooks/useMetrics";
 import { useI18n } from "./i18n";
 import { useKiosk } from "./kiosk";
-import type { Topic } from "./types";
+import { availableCards, useDisplay, type CardId } from "./settings";
+import type { MetricsSnapshot, StaticInfo, Topic } from "./types";
 
 // Recharts is by far the heaviest dependency: keep it out of the initial
 // payload so opening the dashboard on a phone stays instant.
@@ -66,6 +68,9 @@ export default function App() {
   // a kiosk screen only ever shows the dashboard
   const activeTab = kiosk || !tabs.includes(tab) ? "dashboard" : tab;
 
+  // what this machine can fill, which is also what the ⚙ menu may hide
+  const cards = useMemo(() => (metrics ? availableCards(metrics) : []), [metrics]);
+
   useEffect(() => {
     if (activeTab === "history" && features?.history) requestHistory(rangeMs);
   }, [activeTab, rangeMs, features?.history, requestHistory]);
@@ -84,6 +89,7 @@ export default function App() {
         uptime={metrics?.uptime ?? null}
         connected={connected}
         kiosk={kiosk}
+        cards={cards}
         onChangeInterval={setRefreshInterval}
         onToggleKiosk={toggleKiosk}
       />
@@ -99,38 +105,12 @@ export default function App() {
       >
         {activeTab === "dashboard" &&
           (metrics ? (
-            <main
-              className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${
-                kiosk ? "" : "lg:grid-cols-3"
-              }`}
-            >
-              <CpuCard
-                cpu={metrics.cpu}
-                governor={staticInfo?.governor ?? null}
-                maxGhz={staticInfo?.cpuMaxGhz ?? null}
-              />
-              <MemoryCard memory={metrics.memory} />
-              <TemperatureCard temperature={metrics.temperature} />
-              {/* only hardware with a tachometer reports a speed */}
-              {metrics.fan.rpm !== null && <FanCard fan={metrics.fan} />}
-              {/* a measured draw, a modelled one, or the kWh they added up
-                  to — a machine that has none of the three gets no card */}
-              {(metrics.power || metrics.energy) && (
-                <PowerCard
-                  power={metrics.power}
-                  energy={metrics.energy}
-                  model={staticInfo?.model}
-                />
-              )}
-              <DiskCard disk={metrics.disk} />
-              {/* one filesystem is already the headline card's subject */}
-              {metrics.disk.filesystems.length > 1 && (
-                <FilesystemsCard filesystems={metrics.disk.filesystems} />
-              )}
-              <NetworkCard network={metrics.network} />
-              {/* the firmware register exists on Pi hardware only */}
-              {metrics.throttle && <ThrottleCard throttle={metrics.throttle} />}
-            </main>
+            <Dashboard
+              metrics={metrics}
+              info={staticInfo}
+              cards={cards}
+              kiosk={kiosk}
+            />
           ) : (
             <p className="text-sm text-ink-faint">
               {connected ? t("state.waiting") : t("state.connecting")}
@@ -157,5 +137,64 @@ export default function App() {
         {activeTab === "containers" && <ContainerTable containers={containers} />}
       </div>
     </div>
+  );
+}
+
+/**
+ * The card grid.
+ *
+ * `cards` is what the machine can fill and the ⚙ menu is offering; the
+ * reader's choices then decide which of those are drawn. Building the whole
+ * set and filtering keeps one list in charge of the order, so the grid and
+ * the settings menu can never disagree about what exists.
+ */
+function Dashboard({
+  metrics,
+  info,
+  cards,
+  kiosk,
+}: {
+  metrics: MetricsSnapshot;
+  info: StaticInfo | null;
+  cards: readonly CardId[];
+  kiosk: boolean;
+}) {
+  const { t } = useI18n();
+  const { shows } = useDisplay();
+
+  const nodes: Record<CardId, ReactNode> = {
+    cpu: (
+      <CpuCard
+        cpu={metrics.cpu}
+        governor={info?.governor ?? null}
+        maxGhz={info?.cpuMaxGhz ?? null}
+      />
+    ),
+    memory: <MemoryCard memory={metrics.memory} />,
+    temperature: <TemperatureCard temperature={metrics.temperature} />,
+    fan: <FanCard fan={metrics.fan} />,
+    power: (
+      <PowerCard power={metrics.power} energy={metrics.energy} model={info?.model} />
+    ),
+    disk: <DiskCard disk={metrics.disk} />,
+    filesystems: <FilesystemsCard filesystems={metrics.disk.filesystems} />,
+    network: <NetworkCard network={metrics.network} />,
+    pressure: metrics.pressure && <PressureCard pressure={metrics.pressure} />,
+    throttle: metrics.throttle && <ThrottleCard throttle={metrics.throttle} />,
+  };
+
+  const visible = cards.filter((card) => shows(card));
+  if (visible.length === 0) {
+    return <p className="text-sm text-ink-faint">{t("display.allHidden")}</p>;
+  }
+
+  return (
+    <main
+      className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${kiosk ? "" : "lg:grid-cols-3"}`}
+    >
+      {visible.map((card) => (
+        <Fragment key={card}>{nodes[card]}</Fragment>
+      ))}
+    </main>
   );
 }
