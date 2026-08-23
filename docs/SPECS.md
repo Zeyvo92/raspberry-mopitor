@@ -60,6 +60,37 @@ conserve l'historique et détaille processus et conteneurs.
 | Coût | `ENERGY_PRICE` (prix du kWh) et `ENERGY_CURRENCY` affichent le coût de chaque fenêtre ; sans prix, seuls les kWh sont montrés |
 | Graphe | la puissance est enregistrée dans `samples.power` et tracée dans l'onglet Historique (masquée si la machine n'a jamais rapporté un watt) |
 
+### v2.3 — diagnostic et réglages d'affichage (livré)
+
+Le monitor disait *que* la machine était lente ; cette version dit *pourquoi*.
+Tout ce qui suit se lit dans `/proc` et `/sys`, sans dépendance nouvelle.
+
+| Fonction | Détail |
+|---|---|
+| Pression (PSI) | `/proc/pressure/{cpu,io,memory}` : part des 10 / 60 / 300 dernières secondes avec au moins une tâche bloquée. Card dédiée, masquée si le noyau est compilé sans PSI |
+| Répartition CPU | `/proc/stat` : user / sys / **iowait** / irq / steal sur l'intervalle, plus la file d'exécution (`procs_running`), les processus bloqués en E/S (`procs_blocked`) et les changements de contexte par seconde |
+| Mémoire | `/proc/meminfo` : cache (+ slab récupérable), tampons, pages à écrire, partagé. `/proc/vmstat` : débit de swap **in/out** (la différence entre « la machine a swappé » et « la machine agonise ») et compteur d'**OOM kills**, affiché quoi qu'il arrive |
+| Disque | latence moyenne par requête, part du temps occupé (`%util`) et E/S par seconde, par périphérique, depuis les champs temps de `/proc/diskstats` ; **inodes** via `statfs(2)` ; **montage en lecture seule** détecté dans la table de montage de l'hôte |
+| Réseau | erreurs et rejets (colonnes déjà présentes dans `/proc/net/dev`), paquets par seconde, vitesse et duplex négociés (`/sys/class/net/<if>/speed`), connexions TCP établies et retransmissions par seconde (`/proc/net/snmp`) |
+| Carte SD | `pre_eol_info` : verdict du contrôleur (normal / warning / urgent), badge dans l'en-tête |
+| Historique | deux colonnes de plus (`cpu_iowait`, `io_pressure`) et un graphe combiné « attente et pression E/S » |
+| Affichage | menu ⚙ : visibilité par card et bascule « lignes détaillées », mémorisées par navigateur |
+
+Deux règles tiennent l'ensemble :
+
+- **Rien de neuf en régime normal.** Les nouvelles valeurs sont des *lignes
+  détaillées*, masquées par défaut : le tableau de bord par défaut est
+  exactement celui d'avant.
+- **Une anomalie ne se masque pas.** Système de fichiers repassé en lecture
+  seule, OOM kill, usure de carte annoncée par le contrôleur : ces trois-là
+  s'affichent quels que soient les réglages, parce qu'ils ne sont pas un détail
+  qu'on a choisi de cacher.
+
+Le coût est borné par une lecture mise en cache (`throttled()` dans
+`metrics/sysfs.ts`) : la pression, le détail mémoire, les compteurs TCP et la
+vitesse du lien bougent lentement et sont relus au plus une fois par seconde
+(30 s pour le lien), quelle que soit la cadence de la boucle live.
+
 ### Plus tard
 
 - Alertes par seuil (mail/webhook)
@@ -117,6 +148,10 @@ shell* à chaque appel — insoutenable à 100 ms de cadence :
 | réseau | `/proc/net/dev` (+ `/proc/net/route`, `/proc/net/wireless`) | un `exec` de `cat …/statistics/*` **par interface et par tick** |
 | disque (usage) | `/proc/mounts` + `statfs(2)` | `df -kPT` + `cat /proc/mounts` en `execSync` |
 | disque (débit) | `/proc/diskstats` | `lsblk` + `cat /proc/diskstats` |
+| CPU (répartition) | `/proc/stat` | — (`si.currentLoad()` ne publie ni iowait ni file d'exécution) |
+| pression | `/proc/pressure/*` | — |
+| mémoire (détail) | `/proc/meminfo`, `/proc/vmstat` | — |
+| TCP | `/proc/net/snmp` | — |
 
 Une lecture de fichier remplace donc plusieurs processus par tick, et les
 compteurs bruts permettent en prime de calculer les débits sur l'intervalle
@@ -137,7 +172,8 @@ d'environnement — c'est ce qui rend ces collecteurs testables sur fixtures.
   écrit à chaque échantillon. Trois ordres de grandeur plus petite que
   `samples`, elle n'est **pas** purgée — un compteur de consommation qui
   redémarre à zéro chaque semaine ne servirait à rien.
-- Les colonnes ajoutées après coup (`samples.power`) le sont par migration
+- Les colonnes ajoutées après coup (`samples.power`, puis `samples.cpu_iowait`
+  et `samples.io_pressure`) le sont par migration
   explicite au démarrage (`PRAGMA table_info` + `ALTER TABLE`) : `CREATE TABLE
   IF NOT EXISTS` ne touche pas une base existante, et personne ne doit perdre
   une semaine d'historique en mettant à jour.
@@ -170,7 +206,9 @@ Endpoint : `GET /ws` (upgrade). Messages du serveur vers le client :
   "os": "...", "kernel": "...", "arch": "...", "cpuModel": "...", "cores": 4,
   // politique cpufreq et usure du support de boot, lues à la connexion
   "governor": "ondemand", "cpuMaxGhz": 2.4,
-  "storage": { "device": "mmcblk0", "name": "SC32G", "lifeUsedPercent": 20 } } }
+  // preEol: verdict du contrôleur, "normal" | "warning" | "urgent" | null
+  "storage": { "device": "mmcblk0", "name": "SC32G", "lifeUsedPercent": 20,
+               "preEol": "normal" } } }
 
 // à la connexion et à chaque changement — config partagée par tous les clients
 { "type": "config", "data": { "refreshIntervalMs": 1000,
@@ -182,22 +220,49 @@ Endpoint : `GET /ws` (upgrade). Messages du serveur vers le client :
   "ts": 1723300000000,
   "uptime": 123456,
   "cpu": { "load": 12.5, "perCore": [10, 15, 8, 17], "freqGhz": 1.8,
-           "loadAvg": [0.42, 0.35, 0.30] },
+           "loadAvg": [0.42, 0.35, 0.30],
+           // null sans /proc/stat ; iowait est la raison d'être du bloc
+           "breakdown": { "user": 8.1, "system": 3.2, "iowait": 21.4,
+                          "irq": 0.5, "steal": 0 },
+           "runQueue": 3, "blocked": 1, "ctxSwitchesSec": 1420 },
   "memory": { "total": 0, "used": 0, "available": 0,
-              "swapTotal": 0, "swapUsed": 0 },
+              "swapTotal": 0, "swapUsed": 0,
+              // null sans /proc/meminfo ; swap*Sec null au premier échantillon
+              "detail": { "cached": 0, "buffers": 0, "dirty": 0, "writeback": 0,
+                          "shared": 0, "swapInSec": 0, "swapOutSec": 0,
+                          "oomKills": 0 } },
   "temperature": { "cpu": 52.1,            // null si sonde indisponible
                    // sondes hors SoC (NVMe, PMIC) — vide sur la plupart des cartes
                    "sensors": [ { "name": "nvme", "celsius": 41.9 } ] },
   "fan": { "rpm": 3241 },                  // null sans tachymètre (hwmon)
+  // readOnly: null quand la table de montage de l'hôte n'est pas lisible
   "disk": { "mount": "/", "total": 0, "used": 0,
+            "inodesTotal": 0, "inodesUsed": 0, "readOnly": false,
             "filesystems": [ { "mount": "/boot/firmware", "type": "vfat",
-                               "total": 0, "used": 0 } ],
-            "io": { "readSec": 0, "writeSec": 0 } },  // null sans /proc/diskstats
+                               "total": 0, "used": 0, "inodesTotal": 0,
+                               "inodesUsed": 0, "readOnly": false } ],
+            // null sans /proc/diskstats ; awaitMs et utilPercent décrivent le
+            // périphérique le plus occupé, celui sur lequel la machine attend
+            "io": { "readSec": 0, "writeSec": 0, "iops": 42, "awaitMs": 8.5,
+                    "utilPercent": 65,
+                    "devices": [ { "name": "mmcblk0", "readSec": 0, "writeSec": 0,
+                                   "iops": 42, "awaitMs": 8.5,
+                                   "utilPercent": 65 } ] } },
   "network": { "iface": "eth0", "rxSec": 0, "txSec": 0,
                "interfaces": [ { "iface": "eth0", "rxSec": 0, "txSec": 0,
-                                 "rxBytes": 0, "txBytes": 0 } ],
+                                 "rxBytes": 0, "txBytes": 0,
+                                 "rxPacketsSec": 0, "txPacketsSec": 0,
+                                 "errors": 0, "drops": 0,
+                                 // null sur un lien qui ne négocie pas (Wi-Fi)
+                                 "speedMbps": 1000, "duplex": "full" } ],
                // null sur un hôte sans radio
-               "wifi": { "iface": "wlan0", "quality": 90, "signalDbm": -47 } },
+               "wifi": { "iface": "wlan0", "quality": 90, "signalDbm": -47 },
+               // null sans /proc/net/snmp ; retransSegsSec null au 1er échantillon
+               "tcp": { "established": 12, "retransSegsSec": 0.5 } },
+  // null sur un noyau compilé sans PSI ; chaque ressource peut l'être seule
+  "pressure": { "cpu": { "avg10": 1.2, "avg60": 0.8, "avg300": 0.3 },
+                "io": { "avg10": 24, "avg60": 12, "avg300": 4 },
+                "memory": null },
   // null hors matériel Pi : les quatre bits du firmware, maintenant et latchés
   "throttle": { "raw": 327685,
                 "now": { "underVoltage": true, "freqCapped": false,
@@ -221,7 +286,7 @@ Endpoint : `GET /ws` (upgrade). Messages du serveur vers le client :
                 "memUsed": 0, "memTotal": 0, "swapUsed": 0,
                 "diskUsed": 0, "diskTotal": 0,
                 "netRx": 0, "netTx": 0, "fanRpm": 3241,
-                "power": 7.65 } ] } }
+                "power": 7.65, "cpuIowait": 21.4, "ioPressure": 24 } ] } }
 
 // topic "processes" — union du top N CPU et du top N mémoire
 { "type": "processes", "data": {
@@ -267,14 +332,17 @@ l'abonnement et la dernière plage demandée.
   température, le réseau et la puissance appelée.
 - **Couleurs** : teintes choisies dans la bande de luminosité sombre
   (OKLCH L 0.48-0.67) et vérifiées avec un validateur de palette contre le fond
-  des cards (#121215). Le seul graphe à deux séries est le réseau :
-  descendant `#0c9ad9` / montant `#ec4899` se séparent de ΔE 12.7 en deutéranopie
-  (seuil 8) et 30.3 en vision normale (seuil 15). Les deux séries sont en plus
-  étiquetées (légende + flèches ↓/↑) : l'identité ne repose jamais sur la
-  couleur seule. Les valeurs restent en encre neutre, la couleur ne sert qu'à
-  identifier la série.
+  des cards (#121215). Deux graphes portent deux séries à la fois, et ce sont
+  ces paires-là qui doivent survivre au daltonisme. Réseau : descendant
+  `#0c9ad9` / montant `#ec4899`, ΔE 12.7 en deutéranopie (seuil 8) et 30.3 en
+  vision normale (seuil 15). E/S : iowait `#6366f1` / pression `#e11d48`,
+  ΔE 26.7 en protanopie et 32.8 en vision normale. La séparation se vérifie
+  paire par paire, à l'intérieur d'un graphe : deux séries qu'un lecteur ne voit
+  jamais côte à côte n'ont aucune raison de se distinguer. Chaque série est en
+  plus étiquetée (légende + flèches ↓/↑) : l'identité ne repose jamais sur la
+  couleur seule. Les valeurs restent en encre neutre.
 - **Poids** : Recharts est chargé en chunk séparé, à l'ouverture de l'onglet
-  Historique — le premier chargement reste à ~73 kB gzip.
+  Historique — le premier chargement reste à ~78 kB gzip.
 - **i18n** : dictionnaires typés (`en` fait foi, toute clé manquante casse le
   build), langue détectée puis mémorisée dans `localStorage`.
 - **Thème** : une seule palette de tokens (`--color-app`, `--color-surface`,
@@ -301,6 +369,24 @@ l'abonnement et la dernière plage demandée.
 - **Processus** : un champ de filtre (nom, utilisateur, ligne de commande) et une
   sparkline CPU par ligne, alimentée côté client — le serveur devrait sinon
   mémoriser chaque PID vu.
+- **Réglages d'affichage** (`settings.tsx`, menu ⚙) : deux réglages seulement,
+  mémorisés dans `localStorage` (`mopitor.display`), donc propres à chaque
+  navigateur — l'écran mural d'un Pi et un téléphone ne montrent pas la même
+  chose.
+  - *visibilité par card* : la liste proposée est celle des cards que **cette
+    machine peut remplir** (`availableCards()`), calculée à partir du snapshot ;
+    la grille et le menu lisent la même liste, ils ne peuvent donc pas diverger.
+    Tout masquer affiche un message qui explique comment les faire revenir,
+    jamais une page vide.
+  - *lignes détaillées* : un seul interrupteur pour la deuxième couche de
+    chiffres de toutes les cards (répartition CPU, détail mémoire, latence
+    disque, inodes, erreurs réseau, fenêtres PSI longues). **Désactivé par
+    défaut** : ajouter des métriques ne doit pas alourdir le tableau de bord de
+    ceux qui ne les ont pas demandées.
+  - Les **anomalies** (système de fichiers en lecture seule, OOM kills, usure
+    pre-EOL) échappent aux deux réglages.
+  - En mode kiosque le menu disparaît comme les autres réglages, mais les choix,
+    eux, s'appliquent : c'est ce qui permet de composer un écran mural.
 
 ## Configuration (variables d'environnement)
 
@@ -383,8 +469,10 @@ n'apparaît simplement pas.
 - **Serveur** (`server/test/`) : unitaires sur la config, le semver/le checker de
   version (API GitHub mockée en local), chaque collecteur (`systeminformation`
   mocké) et les lecteurs sysfs/procfs — device tree, os-release, hwmon
-  (ventilateur, sondes, rails), `get_throttled`, cpufreq, usure carte,
-  `/proc/net/dev`, `/proc/net/route`, `/proc/net/wireless`, `/proc/mounts`,
+  (ventilateur, sondes, rails), `get_throttled`, cpufreq, usure carte et
+  `pre_eol_info`, `/proc/stat`, `/proc/pressure/*`, `/proc/meminfo`,
+  `/proc/vmstat`, `/proc/net/dev`, `/proc/net/route`, `/proc/net/wireless`,
+  `/proc/net/snmp`, `/sys/class/net/*`, `/proc/mounts`,
   `/proc/diskstats` — montés en arborescences de fixtures temporaires
   (`test/fixtures.ts`) : un Pi 5, un Pi 4 ou une machine sans capteur se
   reproduisent exactement, et aucune attente ne dépend du matériel du runner ; l'historique tourne sur une base SQLite en mémoire (agrégation par
@@ -400,9 +488,12 @@ n'apparaît simplement pas.
   hook `useMetrics` (WebSocket simulée : reconnexion/backoff, abonnements,
   requêtes d'historique, prolongation live de la série), le provider de thème
   (préférence système, changement à chaud, stockage indisponible, `matchMedia`
-  absent ou sans API d'écoute) et le mode kiosque (URL, Échap, API Fullscreen
-  refusée ou absente), chaque composant (états vides, seuils de couleur, badge
-  de mise à jour, tri et filtrage des processus, bandeau de bridage…).
+  absent ou sans API d'écoute), le mode kiosque (URL, Échap, API Fullscreen
+  refusée ou absente), les réglages d'affichage (persistance, valeur stockée
+  illisible ou écrite par une version future, cards disponibles, panneau :
+  ouverture, Échap, clic à l'extérieur) et chaque composant (états vides,
+  seuils de couleur, badge de mise à jour, tri et filtrage des processus,
+  bandeau de bridage, lignes détaillées, anomalies…).
   Recharts est rendu avec un `ResponsiveContainer` de taille fixe, jsdom
   n'ayant pas de layout. Exclusions : `main.tsx` (bootstrap DOM) et les
   utilitaires de test.
@@ -424,15 +515,18 @@ server/                  # backend Node/TS
     history/recorder.ts  # échantillonnage périodique (réutilise le live)
     history/energy.ts    # intégration watts→Wh, compteurs par jour local
     metrics/             # un collecteur par domaine + agrégateur index.ts
-      sysfs.ts           # lectures sysfs tolérantes partagées
+      sysfs.ts           # lectures sysfs tolérantes + cache court (throttled)
       throttle.ts        # registre de bridage du firmware
       power.ts           # rails d'alimentation (hwmon) + estimation par carte
+      procstat.ts        # /proc/stat : iowait, file d'exécution, ctx/s
+      pressure.ts        # /proc/pressure : PSI cpu / io / mémoire
   test/
     fixtures.ts          # arborescences sysfs/procfs jetables
 client/                  # frontend React/Vite/TS
   src/
     hooks/useMetrics.ts  # connexion WS, abonnements, reconnexion auto
     theme.tsx            # choix clair/sombre/système + thème résolu
+    settings.tsx         # cards visibles + lignes détaillées (par navigateur)
     kiosk.ts             # mode kiosque (URL, plein écran, Échap)
     components/          # cards, jauge, onglets, tables, panneau historique
     charts/              # thème, échelles et graphe générique Recharts
@@ -475,4 +569,7 @@ est ramenée à 2,5 s → 0,12 s par tour. L'animation respecte
    · réseau et disque complets ✅ · thème clair ✅ · PWA ✅ · kiosque ✅
 5. **v2.2** — puissance estimée hors Pi 5 ✅ · compteurs d'énergie et coût ✅
    · courbe de puissance dans l'historique ✅
-6. **v2.x** — alertes par seuil (mail/webhook)
+6. **v2.3** — pression PSI ✅ · iowait et file d'exécution ✅ · détail mémoire,
+   swap et OOM ✅ · latence disque, inodes et lecture seule ✅ · erreurs réseau,
+   lien négocié et TCP ✅ · `pre_eol_info` ✅ · réglages d'affichage ✅
+7. **v2.x** — alertes par seuil (mail/webhook)

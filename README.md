@@ -14,12 +14,20 @@ card. Disk and network are reported in
 full: every mounted filesystem, disk read/write throughput, every interface and
 the Wi-Fi signal level.
 
+When something feels slow it says why, rather than leaving you to guess: kernel
+**pressure (PSI)**, the CPU's **iowait** share, **disk latency and busy time**,
+**swap traffic**, **packet errors and drops**, the **negotiated link speed** and
+**TCP retransmissions**. Two failures a Pi otherwise hides — a filesystem the
+kernel has remounted **read-only** and processes killed by the **OOM killer** —
+are called out on the card itself.
+
 Beyond the live view it keeps a **history** (charts over 15 min → 7 days, power
-included), lists the
+and I/O wait included), lists the
 **top processes**, and — when you opt in — shows **per-container Docker stats**.
 The UI is available in English and French (auto-detected from the browser), in a
 light or dark theme, installable as an app, with a **kiosk mode** for a Pi driving
-a small screen.
+a small screen. Every card can be hidden and every detail row folded away from
+the **⚙ display menu**, so the dashboard stays as short as you want it.
 
 Built with Node.js/TypeScript (`systeminformation` + `ws` + the built-in `node:sqlite`,
 no HTTP framework) and React + Vite + Tailwind + Recharts. Full design notes in
@@ -134,6 +142,13 @@ The refresh rate is shown in the dashboard header and can be changed live
 
 ## Using the dashboard
 
+- **Display (⚙)** — pick which cards this browser shows, and whether they show
+  their **detailed rows** (iowait, inodes, packet errors, disk latency…). Both
+  are remembered per browser, so the Pi driving a wall screen and the phone in
+  your pocket can show different things. Detailed rows are **off by default**:
+  the dashboard looks exactly as it always has until you ask for more. What
+  never hides is an anomaly — a read-only filesystem, an OOM kill, a card
+  reporting end-of-life wear.
 - **Theme** — system, light or dark, next to the language picker; the choice is
   remembered in the browser.
 - **Kiosk mode** — the ⛶ button (or `http://<pi-address>:8585/?kiosk=1`) drops
@@ -151,6 +166,11 @@ The refresh rate is shown in the dashboard header and can be changed live
   kWh counters underneath are integrated by the history loop, so they keep
   adding up with nobody watching, and survive a restart. Set `ENERGY_PRICE` to
   what your utility charges to see what the Pi actually costs you.
+- **Pressure** — the share of the last ten seconds during which at least one
+  task was stalled waiting for the CPU, the disk or memory. It is the shortest
+  answer to "why is this slow": load average counts processes that want to run,
+  pressure counts the time they actually lost. The card only appears on kernels
+  built with PSI.
 - **Throttling** — a red banner appears on every tab while the firmware reports
   under-voltage or throttling, and an amber one when it reported either since
   boot. On a Pi, that banner usually means the power supply, not the workload.
@@ -168,6 +188,10 @@ The refresh rate is shown in the dashboard header and can be changed live
   SQLite per week. `HISTORY=false` turns it off entirely.
 - **Energy** rides along with that loop: one multiplication per sample and one
   row per day, so the counters cost nothing beyond the history itself.
+- **The diagnostic readings** are ordinary `/proc` and `/sys` files, and the
+  slow-moving ones (pressure, the memory breakdown, TCP counters, link speed)
+  are cached for a second or more — at a 100 ms refresh they would otherwise be
+  re-read a hundred times to show the same number.
 
 ## Releasing (maintainers)
 
@@ -185,6 +209,9 @@ The refresh rate is shown in the dashboard header and can be changed live
   filesystem and interface, light theme, PWA, kiosk mode
 - **v2.2** ✅ power on every board (measured or modelled), energy counters and
   cost, power history
+- **v2.3** ✅ diagnostic metrics (PSI, iowait, disk latency, inodes, read-only
+  mounts, swap traffic, OOM kills, packet errors, link speed, TCP retransmits,
+  card pre-EOL) and a per-browser display menu
 - **next**: threshold alerts (mail/webhook). See [docs/SPECS.md](docs/SPECS.md).
 
 ## License
