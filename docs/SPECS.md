@@ -91,9 +91,42 @@ Le coût est borné par une lecture mise en cache (`throttled()` dans
 vitesse du lien bougent lentement et sont relus au plus une fois par seconde
 (30 s pour le lien), quelle que soit la cadence de la boucle live.
 
+### v2.4 — santé de services externes (livré)
+
+Un service systemd de l'hôte peut mourir en silence : avec `Restart=always`,
+une unité cassée boucle en échec toutes les quelques secondes et **rien** ne le
+dit nulle part. Le monitor sait maintenant l'afficher — sans pour autant
+pouvoir agir dessus.
+
+| Fonction | Détail |
+|---|---|
+| Convention | n'importe quel processus de l'hôte écrit un petit JSON `{ "status": "ok" \| "failed", "message": "", "updatedAt": "<ISO 8601>" }` ; mopitor **ne fait que le lire**, il n'a aucune opinion sur qui l'écrit |
+| Configuration | `WATCHED_SERVICES`, liste `nom:chemin` séparée par des virgules — opt-in, service par service, aucune découverte automatique |
+| Lecture | `metrics/services.ts`, relu toutes les 30 s (`SERVICES_INTERVAL_MS`) via le cache `throttled()` : un service meurt quelques fois par jour, pas à chaque tick |
+| Tolérance | fichier absent, illisible ou malformé → `unknown`, champ par champ : pour qui regarde le tableau de bord, les trois disent la même chose |
+| Card | une ligne par service : badge vert/rouge/gris, âge du dernier rapport, et le `message` en encart rouge si `failed`. La card n'existe pas si `WATCHED_SERVICES` est vide |
+
+**Pourquoi un fichier et pas systemd.** Interroger systemd depuis le conteneur
+imposerait de monter le socket dbus, ce qui revient à donner le root de l'hôte
+— exactement ce que le reste du projet évite (`/:/host:ro`, socket Docker en
+option). Le flux est donc inversé : l'hôte publie, le monitor lit. Le préfixe
+`/host` réutilise le montage existant, **aucun volume Docker nouveau**.
+
+**Pourquoi pas de règle de fraîcheur.** Une unité qui réessaie toutes les 15 s
+et dont le dernier `ok` date d'une heure est déjà en train de le dire :
+l'**âge** affiché est le signal. Une logique de « stale » ne se justifiera que
+pour un service bien moins bavard — à revoir à ce moment-là.
+
+Côté hôte (hors dépôt) : un drop-in systemd suffit, `ExecStartPost=` écrit
+`ok` à chaque (re)démarrage réussi, `OnFailure=` déclenche un oneshot qui écrit
+`failed` avec la dernière ligne du journal. Recette complète dans le README.
+
 ### Plus tard
 
 - Alertes par seuil (mail/webhook)
+- Notification active sur transition `ok → failed` d'un service watché — hors
+  scope tant qu'aucun canal (push/mail/Telegram) n'est choisi : le choisir est
+  le préalable, pas l'implémentation
 
 ## Stack
 
@@ -520,6 +553,7 @@ server/                  # backend Node/TS
       power.ts           # rails d'alimentation (hwmon) + estimation par carte
       procstat.ts        # /proc/stat : iowait, file d'exécution, ctx/s
       pressure.ts        # /proc/pressure : PSI cpu / io / mémoire
+      services.ts        # santé des services de l'hôte, lue dans leurs fichiers
   test/
     fixtures.ts          # arborescences sysfs/procfs jetables
 client/                  # frontend React/Vite/TS
@@ -572,4 +606,6 @@ est ramenée à 2,5 s → 0,12 s par tour. L'animation respecte
 6. **v2.3** — pression PSI ✅ · iowait et file d'exécution ✅ · détail mémoire,
    swap et OOM ✅ · latence disque, inodes et lecture seule ✅ · erreurs réseau,
    lien négocié et TCP ✅ · `pre_eol_info` ✅ · réglages d'affichage ✅
-7. **v2.x** — alertes par seuil (mail/webhook)
+7. **v2.4** — santé de services externes de l'hôte (fichiers de santé) ✅
+8. **v2.x** — alertes par seuil (mail/webhook) · notification sur bascule
+   `ok → failed` d'un service watché

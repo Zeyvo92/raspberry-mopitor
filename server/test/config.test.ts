@@ -27,6 +27,40 @@ describe("config defaults", () => {
     expect(config.powerMaxWatts).toBe(0);
     expect(config.energyPrice).toBe(0);
     expect(config.energyCurrency).toBe("€");
+    expect(config.watchedServices).toEqual([]);
+    expect(config.servicesIntervalMs).toBe(30_000);
+  });
+});
+
+describe("parseWatchedServices", () => {
+  it("reads the name:path pairs WATCHED_SERVICES lists", async () => {
+    const { config } = await loadConfig({
+      WATCHED_SERVICES: "claude-rc:/host/home/pi/.claude/rc-health.json, backup:/b.json",
+      SERVICES_INTERVAL_MS: "5000",
+    });
+    expect(config.watchedServices).toEqual([
+      { name: "claude-rc", path: "/host/home/pi/.claude/rc-health.json" },
+      { name: "backup", path: "/b.json" },
+    ]);
+    expect(config.servicesIntervalMs).toBe(5000);
+  });
+
+  it("keeps the entries that parse and drops the ones that don't", async () => {
+    const { parseWatchedServices } = await loadConfig({});
+    expect(parseWatchedServices(undefined)).toEqual([]);
+    expect(parseWatchedServices("")).toEqual([]);
+    // no separator, nothing before it, nothing after it, blank name
+    expect(parseWatchedServices("bare,:/orphan.json,noPath:, :/x.json")).toEqual([]);
+    expect(parseWatchedServices("ok:/a.json,broken")).toEqual([
+      { name: "ok", path: "/a.json" },
+    ]);
+  });
+
+  it("keeps the first of two entries sharing a name", async () => {
+    const { parseWatchedServices } = await loadConfig({});
+    expect(parseWatchedServices("svc:/first.json,svc:/second.json")).toEqual([
+      { name: "svc", path: "/first.json" },
+    ]);
   });
 });
 

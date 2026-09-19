@@ -29,6 +29,15 @@ export function formatUptime(seconds: number): string {
   return `${m}m`;
 }
 
+/**
+ * How long ago something happened, in the same coarse units as an uptime.
+ * Below the minute `formatUptime` would floor to "0m", which reads as a
+ * stale reading rather than a fresh one.
+ */
+export function formatAge(ms: number): string {
+  return ms < 60_000 ? "<1m" : formatUptime(ms / 1000);
+}
+
 export function percent(used: number, total: number): number {
   return total > 0 ? (used / total) * 100 : 0;
 }

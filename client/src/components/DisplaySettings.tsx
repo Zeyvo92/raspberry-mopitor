@@ -13,6 +13,7 @@ const CARD_LABELS: Record<CardId, TranslationKey> = {
   network: "display.card.network",
   pressure: "display.card.pressure",
   throttle: "display.card.throttle",
+  services: "display.card.services",
 };
 
 /**

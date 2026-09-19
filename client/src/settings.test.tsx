@@ -113,6 +113,9 @@ describe("availableCards", () => {
             softTempLimit: false,
           },
         },
+        services: [
+          { name: "claude-rc", status: "ok" as const, message: "", updatedAt: null },
+        ],
         disk: {
           ...SNAPSHOT.disk,
           filesystems: [

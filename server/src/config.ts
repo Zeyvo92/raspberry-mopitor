@@ -39,6 +39,33 @@ function boolEnv(name: string, fallback: boolean): boolean {
   return raw !== "false";
 }
 
+/** one WATCHED_SERVICES entry: the label to show, and the file to read it from */
+export interface WatchedService {
+  name: string;
+  path: string;
+}
+
+/**
+ * Parses "claude-rc:/host/home/pi/.claude/rc-health.json,backup:/host/tmp/b.json".
+ *
+ * Split on the *first* colon: the name never contains one and the path might.
+ * Anything malformed is dropped rather than rejected — a typo in one entry
+ * must not cost the reader the services that are spelled correctly.
+ */
+export function parseWatchedServices(raw: string | undefined): WatchedService[] {
+  const services: WatchedService[] = [];
+  for (const entry of (raw ?? "").split(",")) {
+    const colon = entry.indexOf(":");
+    if (colon <= 0) continue; // no separator, or nothing before it
+    const name = entry.slice(0, colon).trim();
+    const file = entry.slice(colon + 1).trim();
+    // a repeated name would draw two rows under the same label
+    if (!name || !file || services.some((service) => service.name === name)) continue;
+    services.push({ name, path: file });
+  }
+  return services;
+}
+
 export const config = {
   port: intEnv("PORT", 8585, 1),
   /** initial sampling/broadcast interval — adjustable at runtime from the UI */
@@ -103,4 +130,9 @@ export const config = {
   /** read by systeminformation too — a single var configures both */
   dockerSocket: process.env.DOCKER_SOCKET ?? "/var/run/docker.sock",
   dockerIntervalMs: intEnv("DOCKER_INTERVAL_MS", 3000, 500),
+
+  /** host services to watch, "name:path" pairs; empty (the default) hides the card */
+  watchedServices: parseWatchedServices(process.env.WATCHED_SERVICES),
+  /** a health file changes when a service dies or restarts, not every second */
+  servicesIntervalMs: intEnv("SERVICES_INTERVAL_MS", 30_000, 1000),
 };
