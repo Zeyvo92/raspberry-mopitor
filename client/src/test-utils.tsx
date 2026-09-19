@@ -114,4 +114,5 @@ export const SNAPSHOT: MetricsSnapshot = {
   throttle: null,
   power: null,
   energy: null,
+  services: [],
 };

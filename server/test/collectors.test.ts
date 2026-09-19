@@ -132,5 +132,7 @@ describe("collectSnapshot", () => {
     expect(snapshot).toHaveProperty("power");
     expect(snapshot.disk.mount).toBe("/");
     expect(snapshot.network.iface).toBeTypeOf("string");
+    // nothing is watched unless WATCHED_SERVICES names something
+    expect(snapshot.services).toEqual([]);
   });
 });

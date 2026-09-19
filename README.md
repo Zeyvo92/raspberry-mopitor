@@ -136,6 +136,8 @@ Tests (Vitest, 100% coverage enforced in CI): `npm test` in `server/` and
 | `DOCKER_STATS` | `true` | set `false` to skip container stats even if the socket is mounted |
 | `DOCKER_SOCKET` | `/var/run/docker.sock` | Docker socket path |
 | `DOCKER_INTERVAL_MS` | `3000` | container stats interval (only while the tab is open) |
+| `WATCHED_SERVICES` | *(none)* | host services to watch, `name:path` pairs separated by commas — see [Watching host services](#watching-host-services) |
+| `SERVICES_INTERVAL_MS` | `30000` | how often the watched health files are re-read |
 
 The refresh rate is shown in the dashboard header and can be changed live
 (100ms → 10s presets); the value is shared by all connected viewers.
@@ -174,6 +176,80 @@ The refresh rate is shown in the dashboard header and can be changed live
 - **Throttling** — a red banner appears on every tab while the firmware reports
   under-voltage or throttling, and an amber one when it reported either since
   boot. On a Pi, that banner usually means the power supply, not the workload.
+- **Services** — the health of whatever you asked mopitor to watch on the host,
+  green / red / grey with the age of the last report. The card only exists when
+  `WATCHED_SERVICES` names something; see below for how to feed it.
+
+## Watching host services
+
+A service on the host can die quietly and stay dead: `Restart=always` turns a
+broken unit into a loop that fails every few seconds, and nothing says so
+anywhere. mopitor can show that state — without being able to cause it.
+
+Asking systemd directly would mean mounting the dbus socket into the
+container, which is root over the host by another name. So the flow is
+inverted: **anything on the host writes a small JSON file, mopitor only reads
+it.** It has no opinion on who wrote it.
+
+```json
+{ "status": "ok", "message": "", "updatedAt": "2026-09-19T10:12:26Z" }
+```
+
+`status` is `ok` or `failed`; `message` is what to show when it failed (the
+last journal line, an exit code…); `updatedAt` is ISO 8601. Name the files to
+watch, one `name:path` pair per service:
+
+```yaml
+WATCHED_SERVICES: "claude-rc:/host/home/pi/.claude/rc-health.json,backup:/host/var/lib/backup/health.json"
+```
+
+The `/host` prefix reuses the read-only mount the compose file already
+declares — **no new volume**. A file that is missing, unreadable or malformed
+reads as `unknown` rather than as an error: to whoever is looking at the
+dashboard, those all mean the same thing. The files are re-read every 30 s
+(`SERVICES_INTERVAL_MS`), not on every tick — a service dies a handful of
+times a day at worst.
+
+Nothing here is discovered automatically, and nothing is alerted on: this is
+passive visibility, one service at a time, by name.
+
+### Feeding it from systemd
+
+A drop-in on the unit you want to watch, with no change to the unit itself
+(`systemctl edit claude-rc.service`, or `--user` for a user unit):
+
+```ini
+[Service]
+ExecStartPost=/usr/local/bin/mopitor-health claude-rc ok
+OnFailure=mopitor-health@claude-rc.service
+```
+
+`ExecStartPost` vouches for the service on every successful (re)start,
+`OnFailure` runs a oneshot that writes the failure and its reason:
+
+```ini
+# /etc/systemd/system/mopitor-health@.service
+[Unit]
+Description=Report %i as failed to mopitor
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c '/usr/local/bin/mopitor-health %i failed "$(journalctl -u %i.service -n 1 -o cat)"'
+```
+
+…where `mopitor-health` writes the JSON, and is the only piece you have to
+supply:
+
+```sh
+#!/bin/sh
+# mopitor-health <name> <ok|failed> [message]
+printf '{"status":"%s","message":"%s","updatedAt":"%s"}\n' \
+  "$2" "$(printf '%s' "$3" | tr -d '"\\')" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  > "/home/pi/.claude/$1-health.json"
+```
+
+A unit that retries every 15 s and last reported `ok` an hour ago is already
+telling you it is gone — the age on the card is the signal, which is why v1
+needs no staleness rule of its own.
 
 ## What it costs the Pi
 
@@ -188,6 +264,8 @@ The refresh rate is shown in the dashboard header and can be changed live
   SQLite per week. `HISTORY=false` turns it off entirely.
 - **Energy** rides along with that loop: one multiplication per sample and one
   row per day, so the counters cost nothing beyond the history itself.
+- **Watched services** are one `read()` per service every 30 s, and none at all
+  when `WATCHED_SERVICES` is empty, which is the default.
 - **The diagnostic readings** are ordinary `/proc` and `/sys` files, and the
   slow-moving ones (pressure, the memory breakdown, TCP counters, link speed)
   are cached for a second or more — at a 100 ms refresh they would otherwise be
@@ -212,7 +290,10 @@ The refresh rate is shown in the dashboard header and can be changed live
 - **v2.3** ✅ diagnostic metrics (PSI, iowait, disk latency, inodes, read-only
   mounts, swap traffic, OOM kills, packet errors, link speed, TCP retransmits,
   card pre-EOL) and a per-browser display menu
-- **next**: threshold alerts (mail/webhook). See [docs/SPECS.md](docs/SPECS.md).
+- **v2.4** ✅ health of services running on the host, read from files they
+  write themselves — no dbus socket, no new volume
+- **next**: threshold alerts (mail/webhook), including a notification when a
+  watched service flips to `failed`. See [docs/SPECS.md](docs/SPECS.md).
 
 ## License
 

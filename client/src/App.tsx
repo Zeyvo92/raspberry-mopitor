@@ -10,6 +10,7 @@ import { PowerCard } from "./components/PowerCard";
 import { PressureCard } from "./components/PressureCard";
 import { ProcessTable } from "./components/ProcessTable";
 import { DEFAULT_RANGE_MS } from "./components/ranges";
+import { ServicesCard } from "./components/ServicesCard";
 import { SystemHeader } from "./components/SystemHeader";
 import { Tabs, type TabId } from "./components/Tabs";
 import { TemperatureCard } from "./components/TemperatureCard";
@@ -181,6 +182,7 @@ function Dashboard({
     network: <NetworkCard network={metrics.network} />,
     pressure: metrics.pressure && <PressureCard pressure={metrics.pressure} />,
     throttle: metrics.throttle && <ThrottleCard throttle={metrics.throttle} />,
+    services: <ServicesCard services={metrics.services} now={metrics.ts} />,
   };
 
   const visible = cards.filter((card) => shows(card));

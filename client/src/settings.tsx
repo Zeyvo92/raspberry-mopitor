@@ -27,7 +27,8 @@ export type CardId =
   | "filesystems"
   | "network"
   | "pressure"
-  | "throttle";
+  | "throttle"
+  | "services";
 
 /** display order of the grid; the panel lists them the same way */
 export const CARD_IDS: readonly CardId[] = [
@@ -41,6 +42,7 @@ export const CARD_IDS: readonly CardId[] = [
   "network",
   "pressure",
   "throttle",
+  "services",
 ];
 
 const STORAGE_KEY = "mopitor.display";
@@ -91,6 +93,8 @@ export function availableCards(metrics: MetricsSnapshot): CardId[] {
     network: true,
     pressure: metrics.pressure !== null,
     throttle: metrics.throttle !== null,
+    // nothing to watch unless the server was told to watch something
+    services: metrics.services.length > 0,
   };
   return CARD_IDS.filter((id) => has[id]);
 }

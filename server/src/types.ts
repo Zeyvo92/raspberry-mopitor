@@ -343,6 +343,28 @@ export interface NetworkMetrics {
   tcp: TcpMetrics | null;
 }
 
+/**
+ * Health of a service running *outside* the container, published by the host
+ * itself. Asking systemd directly would mean handing the container a dbus
+ * socket — root over the host by another name — so the flow is inverted: any
+ * process on the host writes a small JSON file, mopitor only reads it and has
+ * no opinion on who wrote it.
+ *
+ * `unknown` covers "never written", "not readable from here" and "not the
+ * shape we expect": all three say the same thing to a reader.
+ */
+export type ServiceStatus = "ok" | "failed" | "unknown";
+
+export interface ServiceHealth {
+  /** label from WATCHED_SERVICES, e.g. "claude-rc" */
+  name: string;
+  status: ServiceStatus;
+  /** why it failed, as written by the host; empty when there is nothing to say */
+  message: string;
+  /** when the host last wrote the file, ISO 8601; null when it never did */
+  updatedAt: string | null;
+}
+
 export interface MetricsSnapshot {
   /** epoch ms */
   ts: number;
@@ -362,6 +384,8 @@ export interface MetricsSnapshot {
   power: PowerMetrics | null;
   /** null until the history recorder has accumulated a reading */
   energy: EnergyMetrics | null;
+  /** watched host services, empty unless WATCHED_SERVICES names any */
+  services: ServiceHealth[];
 }
 
 /**

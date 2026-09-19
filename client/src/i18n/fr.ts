@@ -117,6 +117,12 @@ export const fr: Dictionary = {
   "throttle.alertSinceBoot": "{conditions} — survenu depuis le démarrage",
   "throttle.advice":
     "Une sous-tension signale une alimentation qui s'effondre : utilisez l'adaptateur officiel et un câble court et épais.",
+  "services.title": "Services",
+  "services.ok": "ok",
+  "services.failed": "en échec",
+  "services.unknown": "inconnu",
+  "services.updated": "rapporté il y a {age}",
+  "services.never": "aucun rapport",
 
   // history
   "history.range": "plage",
@@ -187,6 +193,7 @@ export const fr: Dictionary = {
   "display.card.network": "Réseau",
   "display.card.pressure": "Pression",
   "display.card.throttle": "Bridage",
+  "display.card.services": "Services",
 
   // theme
   "theme.system": "Système",

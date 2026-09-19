@@ -6,6 +6,7 @@ import {
   formatRate,
   formatTimestamp,
   formatUptime,
+  formatAge,
   percent,
 } from "./format";
 
@@ -40,6 +41,15 @@ describe("formatUptime", () => {
     expect(formatUptime(60)).toBe("1m");
     expect(formatUptime(3600)).toBe("1h 0m");
     expect(formatUptime(90061)).toBe("1d 1h 1m");
+  });
+});
+
+describe("formatAge", () => {
+  it("says '<1m' below the minute an uptime would floor to 0m", () => {
+    expect(formatAge(0)).toBe("<1m");
+    expect(formatAge(59_000)).toBe("<1m");
+    expect(formatAge(60_000)).toBe("1m");
+    expect(formatAge(3 * 3600_000)).toBe("3h 0m");
   });
 });
 

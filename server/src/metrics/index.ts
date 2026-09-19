@@ -8,6 +8,7 @@ import { collectMemory } from "./memory.js";
 import { collectNetwork } from "./network.js";
 import { collectPressure } from "./pressure.js";
 import { collectPower, estimatePower } from "./power.js";
+import { collectServices } from "./services.js";
 import { collectTemperature } from "./temperature.js";
 import { collectThrottle } from "./throttle.js";
 
@@ -34,6 +35,7 @@ export async function collectSnapshot(
     pressure,
     throttle,
     sensed,
+    services,
     time,
   ] = await Promise.all([
     collectCpu(),
@@ -45,6 +47,7 @@ export async function collectSnapshot(
     collectPressure(),
     collectThrottle(),
     collectPower(),
+    collectServices(),
     si.time(),
   ]);
 
@@ -66,5 +69,6 @@ export async function collectSnapshot(
     throttle,
     power,
     energy,
+    services,
   };
 }

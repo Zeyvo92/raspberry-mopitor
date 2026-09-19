@@ -116,6 +116,12 @@ export const en = {
   "throttle.alertSinceBoot": "{conditions} — happened since boot",
   "throttle.advice":
     "Under-voltage means the power supply is sagging: use the official adapter and a short, thick cable.",
+  "services.title": "Services",
+  "services.ok": "ok",
+  "services.failed": "failed",
+  "services.unknown": "unknown",
+  "services.updated": "reported {age} ago",
+  "services.never": "no report yet",
 
   // history
   "history.range": "range",
@@ -186,6 +192,7 @@ export const en = {
   "display.card.network": "Network",
   "display.card.pressure": "Pressure",
   "display.card.throttle": "Throttling",
+  "display.card.services": "Services",
 
   // theme
   "theme.system": "System",

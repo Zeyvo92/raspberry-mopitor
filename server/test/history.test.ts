@@ -56,6 +56,7 @@ function snapshot(ts: number, over: Partial<MetricsSnapshot> = {}): MetricsSnaps
     throttle: null,
     power: null,
     energy: null,
+    services: [],
     ...over,
   };
 }

@@ -29,6 +29,11 @@ services:
       # it against a wattmeter, POWER_ESTIMATE=false drops it altogether
       # POWER_IDLE_W: "2.7"
       # POWER_MAX_W: "6.4"
+      # health of services running on the host: each one writes a small JSON
+      # file ({"status":"ok"|"failed","message":"","updatedAt":"<ISO 8601>"}),
+      # mopitor only reads it through the read-only /host mount below — no
+      # dbus socket, no new volume. See "Watching host services" in the README.
+      # WATCHED_SERVICES: "claude-rc:/host/home/pi/.claude/rc-health.json"
     volumes:
       - /:/host:ro
       # keeps the history database across container updates

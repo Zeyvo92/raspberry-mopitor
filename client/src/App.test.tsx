@@ -321,6 +321,25 @@ describe("App display settings", () => {
     memory: null,
   };
 
+  it("draws the services card only for a server that watches some", () => {
+    const services = [
+      {
+        name: "claude-rc",
+        status: "failed" as const,
+        message: "OAuth token expired",
+        updatedAt: "2026-09-19T10:12:26Z",
+      },
+    ];
+    mockedUseMetrics.mockReturnValue(live());
+    const { rerender } = renderWithI18n(<App />);
+    expect(screen.queryByRole("heading", { name: "Services" })).toBeNull();
+
+    mockedUseMetrics.mockReturnValue(live({ metrics: { ...SNAPSHOT, services } }));
+    rerender(<App />);
+    expect(screen.getByRole("heading", { name: "Services" })).toBeInTheDocument();
+    expect(screen.getByText("OAuth token expired")).toBeInTheDocument();
+  });
+
   it("draws the pressure card on a kernel that reports PSI", () => {
     mockedUseMetrics.mockReturnValue(live({ metrics: { ...SNAPSHOT, pressure } }));
     renderWithI18n(<App />);
